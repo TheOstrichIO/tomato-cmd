@@ -6,6 +6,8 @@ import time
 import mimetypes
 import binascii
 import hashlib
+import urllib
+import urllib2
 
 # WordPress API:
 from wordpress_xmlrpc import Client, WordPressPost
@@ -43,6 +45,24 @@ enDevToken = enDevToken_PRODUCTION
 enClient = EvernoteClient(token=enDevToken, sandbox=(enDevToken==enDevToken_SANDBOX))
 enNoteStore = enClient.get_note_store()
 
+class UrlParser:
+    
+    def __init__(self, url):
+        self.url = url
+        self.schema, url = urllib2.splittype(url)
+        host, path = urllib2.splithost(url)
+        userpass, host = urllib2.splituser(host)
+        if userpass:
+            self.user, self.password = urllib2.splitpasswd(userpass)
+        path, self.querystring = urllib.splitquery(path)
+        self.query = self.querystring and self.querystring.split('&') or []
+        #urllib.splitquery(url)
+        self.host, self.port = urllib2.splitport(host)
+        path, self.tag = urllib2.splittag(path)
+        self.path = path.strip('/')
+    
+    def path_parts(self):
+        return self.path.split('/')
 
 class WordPressImageAttachment:
     
@@ -56,6 +76,7 @@ class WordPressImageAttachment:
                              wp_media_item, slot)
                 raise RuntimeError()
             self.__dict__[slot] = getattr(wp_media_item, slot)
+        self.filename = UrlParser(self.link).path_parts()[-1]
             
     def __unicode__(self):
         return u'<%s: %s (%s)>' % (self.__class__.__name__,
@@ -171,6 +192,9 @@ class EvernoteAdaptor():
                     logger.debug(u'Finished waiting for rate limit reset.')
                 
 def save_wp_image_to_evernote(notebook_name, wp_image):
+    # lookup existing WordPress image note
+    note_title = u'%s <%s>' % (wp_image.filename, wp_image.id)
+    
     pass
 
 
