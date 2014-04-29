@@ -93,14 +93,19 @@ class WordPressImageAttachment():
         "Returns a file-like object for reading image data."
         return urllib2.urlopen(self.link)
 
-def wp_attachment_generator(parent_id=None):
-    """Generates WordPress attachment objects.
-    """
-    for media_item in wp.call(media.GetMediaLibrary({'parent_id': parent_id and
-                                                     str(parent_id)})):
-        wpImage = WordPressImageAttachment.fromWpMediaItem(media_item)
-        logging.debug(u'Yielding WordPress media item %s', wpImage)
-        yield wpImage
+class WordPressApiWrapper():
+    
+    def __init__(self, xmlrpc_url, username, password):
+        self._wp = Client(xmlrpc_url, username, password)
+    
+    def mediaItemGenerator(self, parent_id=None):
+        """Generates WordPress attachment objects.
+        """
+        for media_item in self._wp.call(media.GetMediaLibrary(
+                            {'parent_id': parent_id and str(parent_id)})):
+            wpImage = WordPressImageAttachment.fromWpMediaItem(media_item)
+            logging.debug(u'Yielding WordPress media item %s', wpImage)
+            yield wpImage
 
 def ratelimit_wait_and_retry(func):
     def runner(*args, **kwargs):
@@ -296,8 +301,10 @@ def save_wp_image_to_evernote(en_wrapper, notebook_name, wp_image,
         en_wrapper.saveNoteToNotebook(wp_image_note, notebook_name)
 
 def main():
+    wp_wrapper = WordPressApiWrapper(settings.wpXmlRpcUrl,
+                                     settings.wpUsername, settings.wpPassword)
     en_wrapper = EvernoteApiWrapper(settings.enDevToken_PRODUCTION)
-    for wp_image in wp_attachment_generator():
+    for wp_image in wp_wrapper.mediaItemGenerator():
         save_wp_image_to_evernote(en_wrapper, '.zImages', wp_image)
 
 if '__main__' == __name__:
