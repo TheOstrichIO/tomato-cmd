@@ -96,6 +96,22 @@ def wp_attachment_generator(parent_id=None):
         logging.debug(u'Yielding WordPress media item %s', wpImage)
         yield wpImage
 
+def ratelimit_wait_and_retry(func):
+    def runner(*args, **kwargs):
+        while True:
+            try:
+                return func(*args, **kwargs)
+            except Errors.EDAMSystemException, e:
+                # TODO: more flexible error handling? callbacks?
+                if e.errorCode == Errors.EDAMErrorCode.RATE_LIMIT_REACHED:
+                    wait_time = e.rateLimitDuration + 5
+                    logger.warn(u'Evernote rate limit reached :-( '
+                                u'Waiting %d seconds before retrying' %
+                                (wait_time))
+                    time.sleep(wait_time)
+                    logger.debug(u'Finished waiting for rate limit reset.')
+    return runner
+
 class EvernoteApiWrapper():
     
     @classmethod
@@ -154,9 +170,13 @@ class EvernoteApiWrapper():
         self._notes_metadata_page_size = 100
         self._notebook_list = None
     
+    @ratelimit_wait_and_retry
+    def _listNotebooks(self):
+        return self._note_store.listNotebooks()
+    
     def _get_notebook(self, notebook_name):
         if not self._notebook_list:
-            self._notebook_list = self._note_store.listNotebooks()
+            self._notebook_list = self._listNotebooks()
         for nb in self._notebook_list:
             if nb.name == notebook_name:
                 return nb
@@ -175,6 +195,10 @@ class EvernoteApiWrapper():
         self._client = EvernoteClient(token=token, sandbox=sandbox)
         self._note_store = self._client.get_note_store()
     
+    @ratelimit_wait_and_retry
+    def _findNotesMetadata(self, *args, **kwargs):
+        return self._note_store.findNotesMetadata(*args, **kwargs)
+    
     def _notes_metadata_generator(self, note_filter, spec,
                                   start_offset=0, page_size=None):
         # API call wrapped in generator to simplify pagination and mocking.
@@ -182,30 +206,19 @@ class EvernoteApiWrapper():
         if not page_size:
             page_size = self.notes_metadata_page_size()
         while True:
-            try:
-                notes_metadata = self._note_store.findNotesMetadata(
-                                                            self._client.token,
-                                                            note_filter,
-                                                            offset, page_size,
-                                                            spec)
-                for note_offset, note in enumerate(notes_metadata.notes,
-                                                   offset):
-                    # yield also note offset in query,
-                    #  to allow efficient re-entry in case of rate limit.
-                    yield note_offset, note
-                if notes_metadata.startIndex + page_size >= \
-                        notes_metadata.totalNotes:
-                    break
-                offset += page_size
-            except Errors.EDAMSystemException, e:
-                # TODO: more flexible error handling? callbacks?
-                if e.errorCode == Errors.EDAMErrorCode.RATE_LIMIT_REACHED:
-                    wait_time = e.rateLimitDuration + 5
-                    logger.warn(u'Evernote rate limit reached :-( '
-                                u'Waiting %d seconds before retrying' %
-                                (wait_time))
-                    time.sleep(wait_time)
-                    logger.debug(u'Finished waiting for rate limit reset.')
+            notes_metadata = self._findNotesMetadata(self._client.token,
+                                                     note_filter,
+                                                     offset, page_size,
+                                                     spec)
+            for note_offset, note in enumerate(notes_metadata.notes,
+                                               offset):
+                # yield also note offset in query,
+                #  to allow efficient re-entry in case of rate limit.
+                yield note_offset, note
+            if notes_metadata.startIndex + page_size >= \
+                    notes_metadata.totalNotes:
+                break
+            offset += page_size
     
     def getNotesByTitle(self, title, in_notebook=None, page_size=None):
         notebook = in_notebook and self._get_notebook(in_notebook)
@@ -229,17 +242,22 @@ class EvernoteApiWrapper():
                 break
         return ret_note
     
+    @ratelimit_wait_and_retry
+    def _createNote(self, note):
+        self._note_store.createNote(self._client.token, note)
+    
     def saveNoteToNotebook(self, note, in_notebook=None):
         # If no notebook specified - default notebook is used
         notebook = in_notebook and self._get_notebook(in_notebook)
         if notebook:
             note.notebookGuid = notebook.guid
         logger.info('Saving note "%s" to Evernote' % (note.title))
-        self._note_store.createNote(self._client.token, note)
+        self._createNote(note)
     
+    @ratelimit_wait_and_retry
     def updateNote(self, note):
         self._note_store.updateNote(self._client.token, note)
-                
+
 def save_wp_image_to_evernote(en_wrapper, notebook_name, wp_image,
                               force=False):
     # lookup existing WordPress image note
