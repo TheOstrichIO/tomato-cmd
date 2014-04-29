@@ -8,13 +8,14 @@ import binascii
 import hashlib
 import urllib
 import urllib2
+from string import Template
 
 # WordPress API:
-from wordpress_xmlrpc import Client, WordPressPost
-from wordpress_xmlrpc.methods.posts import GetPosts, NewPost
-from wordpress_xmlrpc.methods.users import GetUserInfo
-from wordpress_xmlrpc.compat import xmlrpc_client
-from wordpress_xmlrpc.methods import media, posts
+from wordpress_xmlrpc import Client #, WordPressPost
+#from wordpress_xmlrpc.methods.posts import GetPosts, NewPost
+#from wordpress_xmlrpc.methods.users import GetUserInfo
+#from wordpress_xmlrpc.compat import xmlrpc_client
+from wordpress_xmlrpc.methods import media#, posts
 
 #Evernote API:
 from evernote.api.client import EvernoteClient
@@ -22,7 +23,8 @@ import evernote.edam.type.ttypes as Types
 import evernote.edam.error.ttypes as Errors
 from evernote.edam.notestore import NoteStore
 
-from settings import *
+import settings
+#from settings import *
 
 ## Initialize module logging
 formatter = logging.Formatter(u'%(message)s')
@@ -39,11 +41,7 @@ if hasattr(logger, 'handlers') and not logger.handlers:
                     u'%(asctime)s\t%(levelname)s\t%(message)s'))
     logger.addHandler(fh)
 
-wp = Client(wpXmlRpcUrl, wpUsername, wpPassword)
-
-enDevToken = enDevToken_PRODUCTION
-enClient = EvernoteClient(token=enDevToken, sandbox=(enDevToken==enDevToken_SANDBOX))
-enNoteStore = enClient.get_note_store()
+wp = Client(settings.wpXmlRpcUrl, settings.wpUsername, settings.wpPassword)
 
 class UrlParser:
     
@@ -84,6 +82,10 @@ class WordPressImageAttachment:
     
     def __str__(self):
         return unicode(self).encode('utf-8')
+    
+    def image(self):
+        "Returns a file-like object for reading image data."
+        return urllib2.urlopen(self.link)
 
 def wp_attachment_generator(parent_id=''):
     """Generates WordPress attachment objects.
@@ -94,92 +96,105 @@ def wp_attachment_generator(parent_id=''):
         logging.debug(u'Yielding WordPress media item %s', wpImage)
         yield wpImage
 
-def file_to_resource(res_file, filename, mime=None):
-    if not mime:
-        mime = mimetypes.guess_type(filename)[0]
-    if not mime:
-        mime = u'application/octet-stream'
-        logger.warning(u'Failed guessing mimetype for "%s" '
-                        '(defaulting to "%s")' % (filename, mime))
-    if g_DRYRUN:
-        body = u'Hello, World!'
-    else:
-        body = res_file.read()
-    data = Types.Data(body=body, size=len(body),
-                      bodyHash=hashlib.md5(body).digest())
-    attr = Types.ResourceAttributes(fileName=filename.encode('utf-8'))
-    res = Types.Resource(data=data, mime=mime, attributes=attr)
-    return res
-
-def note_with_resources(noteTitle, resources, parentNotebook=None,
-                        tags=[], created=None, updated=None):
-    myNote = Types.Note(title=noteTitle, tagNames=tags)
-    nBody = '<?xml version="1.0" encoding="UTF-8"?>'
-    nBody += '<!DOCTYPE en-note SYSTEM '    \
-             '"http://xml.evernote.com/pub/enml2.dtd">'
-    nBody += '<en-note>'
-    nBody += '<br />' * 2
-    myNote.resources = resources
-    for res in resources:
-        nBody += '<en-media type="%s" hash="%s" /><br />' %     \
-                 (res.mime, binascii.hexlify(res.data.bodyHash))
-    nBody += '</en-note>'
-    myNote.content = nBody
-    # parentNotebook is optional; if omitted, default notebook is used
-    if parentNotebook and hasattr(parentNotebook, 'guid'):
-        myNote.notebookGuid = parentNotebook.guid
-    myNote.created = created
-    myNote.updated = updated
-    return myNote
-
 class EvernoteApiWrapper():
-    _notebook_list = None
     
     @classmethod
-    def _get_notebook(cls, notebook_name):
-        if not cls._notebook_list:
-            cls._notebook_list = enNoteStore.listNotebooks()
-        for nb in cls._notebook_list:
+    def noteTemplate(cls):
+        return Template('\r\n'.join([
+          '<?xml version="1.0" encoding="UTF-8"?>',
+          '<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">',
+          '',
+          '<en-note style="word-wrap: break-word; -webkit-nbsp-mode: space; '
+          '-webkit-line-break: after-white-space;">',
+          '${content}',
+          '</en-note>',
+          ]))
+    
+    @classmethod
+    def makeNote(cls, title, content, in_notebook_guid=None, resources=None,
+                 tags=[], created=None, updated=None):
+        note = Types.Note(title=title, tagNames=tags)
+        note.content = cls.noteTemplate().safe_substitute({'content': content})
+        note.resources = resources
+        if in_notebook_guid:
+            note.notebookGuid = in_notebook_guid
+        note.created = created
+        note.updated = updated
+        return note
+    
+    @classmethod
+    def makeResource(cls, src_file, filename, mime=None):
+        if not mime:
+            mime = mimetypes.guess_type(filename)[0]
+        if not mime:
+            mime = u'application/octet-stream'
+            logger.warning(u'Failed guessing mimetype for "%s" '
+                            '(defaulting to "%s")' % (filename, mime))
+        # mimetype workarounds:
+        if 'image/x-png' == mime:
+            # seems like Evernote (Windows) will display
+            #  the image inline in the note only this way.
+            mime = 'image/png'
+        body = src_file.read()
+        data = Types.Data(body=body, size=len(body),
+                          bodyHash=hashlib.md5(body).digest())
+        attr = Types.ResourceAttributes(fileName=filename.encode('utf-8'))
+        resource = Types.Resource(data=data, mime=mime, attributes=attr)
+        resource_tag = '<en-media type="%s" hash="%s" />' % \
+                       (mime, binascii.hexlify(data.bodyHash))
+        return resource, resource_tag.encode('utf-8')
+        
+    def __init__(self, token, sandbox=False):
+        self.cached_notebook = None
+        self._init_en_client(token, sandbox)
+        self._notes_metadata_page_size = 100
+        self._notebook_list = None
+    
+    def _get_notebook(self, notebook_name):
+        if not self._notebook_list:
+            self._notebook_list = self._note_store.listNotebooks()
+        for nb in self._notebook_list:
             if nb.name == notebook_name:
                 return nb
         logger.warning(u'Could not find notebook "%s"', notebook_name)
-        
-    def __init__(self):
-        self.cached_notebook = None
     
-    def getNotesByTitle(self, title, in_notebook=None):
-        notebook = self._get_notebook(in_notebook)
-
-    def save_resource_to_evernote(self, event):
+    @property
+    def notes_metadata_page_size(self):
+        return self._notes_metadata_page_size
+    @notes_metadata_page_size.setter
+    def notes_metadata_page_size(self, value):
+        self._notes_metadata_page_size = value
+    
+    def _init_en_client(self, token, sandbox):
+        # Client initialization code in dedicated function
+        #  to simplify mocking for unit tests.
+        self._client = EvernoteClient(token=token, sandbox=sandbox)
+        self._note_store = self._client.get_note_store()
+    
+    def _notes_metadata_generator(self, note_filter, spec,
+                                  start_offset=0, page_size=None):
+        # API call wrapped in generator to simplify pagination and mocking.
+        offset = start_offset
+        if not page_size:
+            page_size = self.notes_metadata_page_size()
         while True:
             try:
-                if self.notebook and not self.cached_notebook:
-                    self.cached_notebook = self._get_notebook(self.notebook)
-                self.event = event
-                note_title = ''
-                logger.debug(u'Checking for existing note "%s"' % (note_title))
-                query = 'filename:"%s"' % (event[u'filename'].encode('utf-8'))
-        ##        query = 'intitle:"%s"'  % (note_title.encode('utf-8'))
-        ##        if self.cached_notebook:
-        ##            query = 'notebook:"%s" %s' % (self.cached_notebook.name, query)
-                note_filter = NoteStore.NoteFilter(words=query)
-                spec = NoteStore.NotesMetadataResultSpec(includeTitle=True)
-                note_list = enNoteStore.findNotesMetadata(enDevToken, note_filter,
-                                                          0, 10, spec)
-                for note in note_list.notes:
-                    if note.title == note_title.encode('utf-8'):
-                        logger.debug(u'Note "%s" exists. Skipping.' % (note_title))
-                        return False
-                logger.info(u'Creating note "%s"' % (note_title))
-                resource = file_to_resource(event[u'fileobj'](), event[u'filename'])
-                note = note_with_resources(note_title.encode('utf-8'), [resource],
-                               self.cached_notebook, self.tags,
-                               created=event.has_key(u'recv_date') and
-                               1000*int(time.mktime(event[u'recv_date'].timetuple())))
-                if not g_DRYRUN:
-                    enNoteStore.createNote(enDevToken, note)
-                return True
+                notes_metadata = self._note_store.findNotesMetadata(
+                                                            self._client.token,
+                                                            note_filter,
+                                                            offset, page_size,
+                                                            spec)
+                for note_offset, note in enumerate(notes_metadata.notes,
+                                                   offset):
+                    # yield also note offset in query,
+                    #  to allow efficient re-entry in case of rate limit.
+                    yield note_offset, note
+                if notes_metadata.startIndex + page_size >= \
+                        notes_metadata.totalNotes:
+                    break
+                offset += page_size
             except Errors.EDAMSystemException, e:
+                # TODO: more flexible error handling? callbacks?
                 if e.errorCode == Errors.EDAMErrorCode.RATE_LIMIT_REACHED:
                     wait_time = e.rateLimitDuration + 5
                     logger.warn(u'Evernote rate limit reached :-( '
@@ -187,17 +202,75 @@ class EvernoteApiWrapper():
                                 (wait_time))
                     time.sleep(wait_time)
                     logger.debug(u'Finished waiting for rate limit reset.')
+    
+    def getNotesByTitle(self, title, in_notebook=None, page_size=None):
+        notebook = in_notebook and self._get_notebook(in_notebook)
+        # remove occurrences of '"' because Evernote ignores it in search
+        query = 'intitle:"%s"' % (title.replace('"', '').encode('utf-8'))
+        note_filter = NoteStore.NoteFilter(words=query,
+                                       notebookGuid=notebook and notebook.guid)
+        spec = NoteStore.NotesMetadataResultSpec(includeTitle=True,
+                                                 includeUpdated=True)
+        return self._notes_metadata_generator(note_filter, spec,
+                                              page_size=page_size)
+    
+    def getSingleNoteByTitle(self, title, in_notebook=None):
+        ret_note = None
+        for offset, note_metadata in self.getNotesByTitle(title,
+                                                          in_notebook, 2):
+            if 0 == offset:
+                ret_note = note_metadata
+            else:
+                logger.warn('More than 1 note matches query')
+                break
+        return ret_note
+    
+    def saveNoteToNotebook(self, note, in_notebook=None):
+        # If no notebook specified - default notebook is used
+        notebook = in_notebook and self._get_notebook(in_notebook)
+        if notebook:
+            note.notebookGuid = notebook.guid
+        logger.info('Saving note "%s" to Evernote' % (note.title))
+        self._note_store.createNote(self._client.token, note)
+    
+    def updateNote(self, note):
+        self._note_store.updateNote(self._client.token, note)
                 
-def save_wp_image_to_evernote(notebook_name, wp_image):
+def save_wp_image_to_evernote(en_wrapper, notebook_name, wp_image,
+                              force=False):
     # lookup existing WordPress image note
     note_title = u'%s <%s>' % (wp_image.filename, wp_image.id)
-    
-    pass
-
+    image_note = en_wrapper.getSingleNoteByTitle(note_title, notebook_name)
+    if not image_note or force:
+        # prepare resource and note
+        resource, resource_tag = en_wrapper.makeResource(wp_image.image(),
+                                                         wp_image.filename)
+        note_content = '%s\r\n<hr/>\r\n' % (resource_tag)
+        for attr in WordPressImageAttachment._slots:
+            note_content += '<div>%s=%s</div>\r\n' % (attr,
+                                                      getattr(wp_image, attr))
+        wp_image_note = en_wrapper.makeNote(title=note_title,
+                                            content=note_content,
+                                            resources=[resource])
+    if image_note:
+        # note exists
+        logger.info('WP Image note "%s" exists in Evernote', note_title)
+        if force:
+            logger.info('Updating note with WordPress version.')
+            # update existing note with overwritten content
+            wp_image_note.guid = image_note.guid
+            en_wrapper.updateNote(wp_image_note)
+        else:
+            logger.debug('Skipping note update')
+    else:
+        # create new note
+        logger.info('Creating new WP Image note "%s"', note_title)
+        en_wrapper.saveNoteToNotebook(wp_image_note, notebook_name)
 
 def main():
+    en_wrapper = EvernoteApiWrapper(settings.enDevToken_PRODUCTION)
     for wp_image in wp_attachment_generator(457):
-        save_wp_image_to_evernote('.zImages', wp_image)
+        save_wp_image_to_evernote(en_wrapper, '.zImages', wp_image)
 
 if '__main__' == __name__:
     main()
