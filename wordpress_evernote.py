@@ -15,7 +15,7 @@ from wordpress_xmlrpc import Client #, WordPressPost
 #from wordpress_xmlrpc.methods.posts import GetPosts, NewPost
 #from wordpress_xmlrpc.methods.users import GetUserInfo
 #from wordpress_xmlrpc.compat import xmlrpc_client
-from wordpress_xmlrpc.methods import media#, posts
+from wordpress_xmlrpc.methods import media, posts
 
 #Evernote API:
 from evernote.api.client import EvernoteClient
@@ -40,8 +40,6 @@ if hasattr(logger, 'handlers') and not logger.handlers:
     fh.setFormatter(logging.Formatter(
                     u'%(asctime)s\t%(levelname)s\t%(message)s'))
     logger.addHandler(fh)
-
-wp = Client(settings.wpXmlRpcUrl, settings.wpUsername, settings.wpPassword)
 
 class UrlParser:
     
@@ -93,19 +91,40 @@ class WordPressImageAttachment():
         "Returns a file-like object for reading image data."
         return urllib2.urlopen(self.link)
 
+class WordPressPost():
+    
+    @classmethod
+    def fromWpPost(cls, wp_post):
+        new_post = cls()
+        new_post._init_from_wp_post(wp_post)
+        return new_post
+    
+    def _init_from_wp_post(self, wp_post):
+        self.id = wp_post.id
+        self.title = wp_post.title
+        self.slug = wp_post.slug
+        self.post_type = wp_post.post_type
+        self.post_status = wp_post.post_status
+        # TODO: bring categories, tags, author, thumbnail
+        # TODO: add hemingway-grade custom field
+
 class WordPressApiWrapper():
     
     def __init__(self, xmlrpc_url, username, password):
         self._wp = Client(xmlrpc_url, username, password)
     
     def mediaItemGenerator(self, parent_id=None):
-        """Generates WordPress attachment objects.
-        """
+        "Generates WordPress attachment objects."
         for media_item in self._wp.call(media.GetMediaLibrary(
                             {'parent_id': parent_id and str(parent_id)})):
             wpImage = WordPressImageAttachment.fromWpMediaItem(media_item)
             logging.debug(u'Yielding WordPress media item %s', wpImage)
             yield wpImage
+    
+    def postGenerator(self):
+        "Generates WordPress post objects"
+        for post in self._wp.call(posts.GetPosts()):
+            yield post
 
 def ratelimit_wait_and_retry(func):
     def runner(*args, **kwargs):
@@ -304,8 +323,10 @@ def main():
     wp_wrapper = WordPressApiWrapper(settings.wpXmlRpcUrl,
                                      settings.wpUsername, settings.wpPassword)
     en_wrapper = EvernoteApiWrapper(settings.enDevToken_PRODUCTION)
-    for wp_image in wp_wrapper.mediaItemGenerator():
-        save_wp_image_to_evernote(en_wrapper, '.zImages', wp_image)
+    #for wp_image in wp_wrapper.mediaItemGenerator():
+    #    save_wp_image_to_evernote(en_wrapper, '.zImages', wp_image)
+    for wp_post in wp_wrapper.postGenerator():
+        print wp_post
 
 if '__main__' == __name__:
     main()
