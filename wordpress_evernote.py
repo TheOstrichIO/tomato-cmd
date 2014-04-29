@@ -132,26 +132,23 @@ def note_with_resources(noteTitle, resources, parentNotebook=None,
     myNote.updated = updated
     return myNote
 
-class EvernoteAdaptor():
-    notebook_list = None
+class EvernoteApiWrapper():
+    _notebook_list = None
     
     @classmethod
     def _get_notebook(cls, notebook_name):
-        if not cls.notebook_list:
-            cls.notebook_list = enNoteStore.listNotebooks()
-        for nb in cls.notebook_list:
+        if not cls._notebook_list:
+            cls._notebook_list = enNoteStore.listNotebooks()
+        for nb in cls._notebook_list:
             if nb.name == notebook_name:
                 return nb
-        logger.warning(u'Could not find notebook "%s" - '
-                        'using default notebook' %
-                        (notebook_name))
+        logger.warning(u'Could not find notebook "%s"', notebook_name)
         
-    def __init__(self, title_pattern, notebook=None, tags=[]):
-        self.title_pattern = title_pattern
-        self.notebook = notebook
+    def __init__(self):
         self.cached_notebook = None
-        self.tags = [tag.encode('utf-8') for tag in tags]
-        self.tags.append(u'~MyFTTT'.encode('utf-8'))
+    
+    def getNotesByTitle(self, title, in_notebook=None):
+        notebook = self._get_notebook(in_notebook)
 
     def save_resource_to_evernote(self, event):
         while True:
