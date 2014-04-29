@@ -87,10 +87,10 @@ class WordPressImageAttachment:
         "Returns a file-like object for reading image data."
         return urllib2.urlopen(self.link)
 
-def wp_attachment_generator(parent_id=''):
+def wp_attachment_generator(parent_id=None):
     """Generates WordPress attachment objects.
     """
-    for media_item in wp.call(media.GetMediaLibrary({'parent_id':
+    for media_item in wp.call(media.GetMediaLibrary({'parent_id': parent_id and
                                                      str(parent_id)})):
         wpImage = WordPressImageAttachment(media_item)
         logging.debug(u'Yielding WordPress media item %s', wpImage)
@@ -135,6 +135,10 @@ class EvernoteApiWrapper():
             # seems like Evernote (Windows) will display
             #  the image inline in the note only this way.
             mime = 'image/png'
+        if 'image/pjpeg' == mime:
+            # seems like Evernote (Windows) will display
+            #  the image inline in the note only this way.
+            mime = 'image/jpeg'
         body = src_file.read()
         data = Types.Data(body=body, size=len(body),
                           bodyHash=hashlib.md5(body).digest())
@@ -269,7 +273,7 @@ def save_wp_image_to_evernote(en_wrapper, notebook_name, wp_image,
 
 def main():
     en_wrapper = EvernoteApiWrapper(settings.enDevToken_PRODUCTION)
-    for wp_image in wp_attachment_generator(457):
+    for wp_image in wp_attachment_generator():
         save_wp_image_to_evernote(en_wrapper, '.zImages', wp_image)
 
 if '__main__' == __name__:
