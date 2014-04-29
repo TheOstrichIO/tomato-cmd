@@ -62,12 +62,18 @@ class UrlParser:
     def path_parts(self):
         return self.path.split('/')
 
-class WordPressImageAttachment:
+class WordPressImageAttachment():
     
     _slots = frozenset(('id', 'title', 'link', 'parent', 'caption',
                         'date_created', 'description'))
     
-    def __init__(self, wp_media_item):
+    @classmethod
+    def fromWpMediaItem(cls, wp_media_item):
+        new_object = cls()
+        new_object._init_from_wp_media_item(wp_media_item)
+        return new_object
+    
+    def _init_from_wp_media_item(self, wp_media_item):
         for slot in self._slots:
             if not hasattr(wp_media_item, slot):
                 logger.error('WordPress MediaItem "%s" has not attribute "%s"',
@@ -92,7 +98,7 @@ def wp_attachment_generator(parent_id=None):
     """
     for media_item in wp.call(media.GetMediaLibrary({'parent_id': parent_id and
                                                      str(parent_id)})):
-        wpImage = WordPressImageAttachment(media_item)
+        wpImage = WordPressImageAttachment.fromWpMediaItem(media_item)
         logging.debug(u'Yielding WordPress media item %s', wpImage)
         yield wpImage
 
