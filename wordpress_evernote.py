@@ -12,6 +12,7 @@ import urllib2
 from string import Template
 from xml.etree import ElementTree
 import csv
+from collections import namedtuple
 
 # WordPress API:
 from wordpress_xmlrpc import Client #, WordPressPost
@@ -106,9 +107,9 @@ class WordPressPost():
         return new_post
     
     @classmethod
-    def fromEvernote(cls, note_content):
+    def fromEvernote(cls, en_wrapper, note_content):
         new_post = cls()
-        new_post._init_from_evernote(note_content)
+        new_post._init_from_evernote(en_wrapper, note_content)
         return new_post
     
     def __init__(self):
@@ -133,7 +134,7 @@ class WordPressPost():
         # TODO: bring categories, tags, author, thumbnail, content
         # TODO: bring hemingway-grade and content format custom fields
     
-    def _init_from_evernote(self, note_content):
+    def _init_from_evernote(self, en_wrapper, note_content):
         def fix_text(text):
             return text and text.lstrip('\n\r').rstrip(' \n\r\t') or ''
         def parse_link(atag):
@@ -142,7 +143,13 @@ class WordPressPost():
             # in markdown - web-links should parse to the a.text,
             #  and Evernote links should load the related WpImage
             # luckily - I don't want to support other formats...
-            return '<parse-link(%s)>' % (atag)
+            href = atag.attrib.get('href', '')
+            if href.startswith('evernote:///view/'):
+                note_link = en_wrapper.parseNoteLinkUrl(href)
+                # TODO: get link from note
+                return '<en-note(%s)>' % (note_link.noteGuid)
+            else:
+                return atag.text
         def parse_div(div):
             lines = [fix_text(div.text)]
             div_tail = fix_text(div.tail)
@@ -210,8 +217,8 @@ class WordPressPost():
             elif 'div' == e.tag:
                 for line in parse_div(e):
                     parse_line(line, in_meta)
-        print 'post content:'
-        print self.content
+        #print 'post content:'
+        #print self.content
 
 class WordPressApiWrapper():
     
@@ -298,6 +305,29 @@ class EvernoteApiWrapper():
         resource_tag = '<en-media type="%s" hash="%s" />' % \
                        (mime, binascii.hexlify(data.bodyHash))
         return resource, resource_tag.encode('utf-8')
+    
+    @classmethod
+    def parseNoteLinkUrl(cls, url):
+        """Returns parsed link object.
+        Ref: http://dev.evernote.com/doc/articles/note_links.php
+        Currently supporting only notes in synced notebooks, and not linked.
+        (e.g. no `client specific id` and `linked notebook guid`)
+        """
+        link = namedtuple('EvernoteLink', ['user_id', 'shard_id', 'noteGuid',])
+        note_link_match = re.match('evernote\:\/\/\/view\/'
+                                   '(?P<uid>\d+)/(?P<sid>s\d+)\/'
+                                   '(?P<note_id>[0-9a-f]{8}-[0-9a-f]{4}-'
+                                   '[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})'
+                                   '\/(?P=note_id)\/', url)
+        if note_link_match:
+            d = note_link_match.groupdict()
+            link.user_id = d['uid']
+            link.shard_id = d['sid']
+            link.noteGuid = d['note_id']
+            return link
+        else:
+            logger.error('Failed parsing Evernote note link %s', url)
+            raise RuntimeError()
         
     def __init__(self, token, sandbox=False):
         self.cached_notebook = None
