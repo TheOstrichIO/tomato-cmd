@@ -4,7 +4,22 @@ from mock import patch
 from wordpress_evernote import WordPressPost
 from wordpress_evernote import EvernoteApiWrapper
 
-test_content = [
+from collections import namedtuple
+
+EvernoteNotebook = namedtuple('EvernoteNotebook', ['guid', 'name'])
+EvernoteNote = namedtuple('EvernoteNote', ['guid', 'title',
+                                           'notebookGuid', 'content'])
+
+test_notebooks = [EvernoteNotebook('abcd1234-5678-abef-7890-abcd1234abcd',
+                                   'Blog Posts'),
+                  EvernoteNotebook('abcd1234-5678-cdef-7890-abcd1234abcd',
+                                   'Blog Images'),]
+
+test_post_notes = [
+       EvernoteNote(guid='abcd1234-5678-abcd-7890-abcd1234abcd',
+                    title='Test post note',
+                    notebookGuid='abcd1234-5678-abef-7890-abcd1234abcd',
+                    content=
 """<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
 <en-note style="word-wrap: break-word; -webkit-nbsp-mode: space; -webkit-line-break: after-white-space;">
 <div>
@@ -42,7 +57,7 @@ title=Test Post with Title out of Div and = Symbol
 <div>Line with Evernote TODO checkbox followed by some text (<en-todo/>do this better). Parser should warn.</div>
 <div><br/></div>
 <div>Finish with one [link with a tag](<a href="http://www.ostricher.com/">https://www.ostricher.com/</a>), and [one link with no a tag but with title](http://www.ostricher.com/ "Ostricher.com site"), followed by some text.</div>
-</en-note>""",
+</en-note>"""),
 ]
 
 expected_content = [
@@ -69,14 +84,22 @@ Finish with one [link with a tag](https://www.ostricher.com/), and [one link wit
 """,
 ]
 
+def mocked_get_note(instance, guid):
+    for note in test_post_notes:
+        if note.guid == guid:
+            return note
+
 class TestEvernoteWpPostParser(unittest.TestCase):
     
     @patch('wordpress_evernote.EvernoteApiWrapper._init_en_client')
     def setUp(self, mock_init_en_client):
         self.evernote = EvernoteApiWrapper(token='123')
     
-    def test_evernote_post_parser(self):
-        wp_post = WordPressPost.fromEvernote(self.evernote, test_content[0])
+    @patch('wordpress_evernote.EvernoteApiWrapper.getNote',
+           new_callable=lambda: mocked_get_note)
+    def test_evernote_post_parser(self, mock_note_getter):
+        wp_post = WordPressPost.fromEvernote(self.evernote,
+                                             test_post_notes[0].guid)
         self.assertEqual('post', wp_post.post_type)
         self.assertEqual('markdown', wp_post.content_format)
         self.assertEqual('Test Post with Title out of Div and = Symbol',

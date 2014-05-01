@@ -107,9 +107,9 @@ class WordPressPost():
         return new_post
     
     @classmethod
-    def fromEvernote(cls, en_wrapper, note_content):
+    def fromEvernote(cls, en_wrapper, note_guid):
         new_post = cls()
-        new_post._init_from_evernote(en_wrapper, note_content)
+        new_post._init_from_evernote(en_wrapper, note_guid)
         return new_post
     
     def __init__(self):
@@ -134,7 +134,7 @@ class WordPressPost():
         # TODO: bring categories, tags, author, thumbnail, content
         # TODO: bring hemingway-grade and content format custom fields
     
-    def _init_from_evernote(self, en_wrapper, note_content):
+    def _init_from_evernote(self, en_wrapper, note_guid):
         def fix_text(text):
             return text and text.lstrip('\n\r').rstrip(' \n\r\t') or ''
         def parse_link(atag):
@@ -209,7 +209,9 @@ class WordPressPost():
                 self.content += line + '\n'
                 if self.content.endswith('\n\n\n'):
                     self.content = self.content[:-1]
-        root = ElementTree.fromstring(note_content)
+        # Start here
+        note = en_wrapper.getNote(note_guid)
+        root = ElementTree.fromstring(note.content)
         in_meta = True
         for e in root.iter():
             if 'hr' == e.tag:
@@ -217,8 +219,6 @@ class WordPressPost():
             elif 'div' == e.tag:
                 for line in parse_div(e):
                     parse_line(line, in_meta)
-        #print 'post content:'
-        #print self.content
 
 class WordPressApiWrapper():
     
@@ -422,6 +422,11 @@ class EvernoteApiWrapper():
     @ratelimit_wait_and_retry
     def updateNote(self, note):
         self._note_store.updateNote(self._client.token, note)
+    
+    @ratelimit_wait_and_retry
+    def getNote(self, note_guid, with_content_flag=True):
+        return self._note_store.getNote(self._client.token,
+                                        note_guid, with_content_flag)
 
 def save_wp_image_to_evernote(en_wrapper, notebook_name, wp_image,
                               force=False):
