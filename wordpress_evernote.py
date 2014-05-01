@@ -9,6 +9,7 @@ import hashlib
 import urllib
 import urllib2
 from string import Template
+from xml.etree import ElementTree
 
 # WordPress API:
 from wordpress_xmlrpc import Client #, WordPressPost
@@ -99,14 +100,74 @@ class WordPressPost():
         new_post._init_from_wp_post(wp_post)
         return new_post
     
+    @classmethod
+    def fromEvernote(cls, note_content):
+        new_post = cls()
+        new_post._init_from_evernote(note_content)
+        return new_post
+    
+    def __init__(self):
+        self.content = ''
+    
     def _init_from_wp_post(self, wp_post):
         self.id = wp_post.id
         self.title = wp_post.title
         self.slug = wp_post.slug
         self.post_type = wp_post.post_type
         self.post_status = wp_post.post_status
-        # TODO: bring categories, tags, author, thumbnail
-        # TODO: add hemingway-grade custom field
+        # TODO: bring categories, tags, author, thumbnail, content
+        # TODO: bring hemingway-grade and content format custom fields
+    
+    def _init_from_evernote(self, note_content):
+        def fix_text(text):
+            return text and text.lstrip('\n\r').rstrip(' \n\r\t') or ''
+        def parse_link(atag):
+            # TODO: parse the link!
+            # depends on content-format!
+            # in markdown - web-links should parse to the a.text,
+            #  and Evernote links should load the related WpImage
+            # luckily - I don't want to support other formats...
+            return '<parse-link(%s)>' % (atag)
+        def parse_div(div):
+            lines = [fix_text(div.text)]
+            div_tail = fix_text(div.tail)
+            for e in div:
+                tail = fix_text(e.tail)
+                if 'div' == e.tag:
+                    if div_tail:
+                        lines.append(div_tail)
+                    return lines
+                elif 'a' == e.tag:
+                    lines[-1] += parse_link(e) + tail
+                elif 'br' == e.tag:
+                    lines.append(tail)
+                elif e.tag in ('hr',):
+                    pass
+                elif 'en-todo' == e.tag:
+                    logger.warn('Post still contains TODOs!')
+                    lines[-1] += '&#x2751;' + tail
+                else:
+                    logger.warn('Don\'t know what to do with %s', repr(e))
+            if div_tail:
+                lines.append(div_tail)
+            return lines
+        def parse_line(line, in_meta):
+            if in_meta:
+                print 'meta:', line
+            else:
+                self.content += line + '\n'
+                if self.content.endswith('\n\n\n'):
+                    self.content = self.content[:-1]
+        root = ElementTree.fromstring(note_content)
+        in_meta = True
+        for e in root.iter():
+            if 'hr' == e.tag:
+                in_meta = False
+            elif 'div' == e.tag:
+                for line in parse_div(e):
+                    parse_line(line, in_meta)
+        print 'post content:'
+        print self.content
 
 class WordPressApiWrapper():
     
