@@ -3,6 +3,7 @@
 
 import logging
 import time
+import re
 import mimetypes
 import binascii
 import hashlib
@@ -10,6 +11,7 @@ import urllib
 import urllib2
 from string import Template
 from xml.etree import ElementTree
+import csv
 
 # WordPress API:
 from wordpress_xmlrpc import Client #, WordPressPost
@@ -25,7 +27,7 @@ import evernote.edam.error.ttypes as Errors
 from evernote.edam.notestore import NoteStore
 
 import settings
-#from settings import *
+import slugify
 
 ## Initialize module logging
 formatter = logging.Formatter(u'%(message)s')
@@ -93,6 +95,9 @@ class WordPressImageAttachment():
         return urllib2.urlopen(self.link)
 
 class WordPressPost():
+    _slots = frozenset(('id', 'title', 'slug', 'post_type',
+                        'post_status', 'content_format', 'content',
+                        'categories', 'tags', 'thumbnail', 'hemingway_grade'))
     
     @classmethod
     def fromWpPost(cls, wp_post):
@@ -107,7 +112,17 @@ class WordPressPost():
         return new_post
     
     def __init__(self):
+        for slot in self._slots:
+            setattr(self, slot, None)
         self.content = ''
+        self.tags = list()
+        self.categories = list()
+    
+    def get_slug(self):
+        if self.slug:
+            return self.slug
+        elif self.title:
+            return slugify.slugify(self.title)
     
     def _init_from_wp_post(self, wp_post):
         self.id = wp_post.id
@@ -151,9 +166,38 @@ class WordPressPost():
             if div_tail:
                 lines.append(div_tail)
             return lines
+        def parse_list_value(value):
+            # Handle stringed lists of the form:
+            # in: 'val1,"val2", val3-hi, "val 4, quoted"'
+            # out: ['val1', 'val2', 'val3-hi', 'val 4, quoted'] (4 items)
+            return reduce(lambda x, y: x + y,
+                          list(csv.reader([value], skipinitialspace=True)))
         def parse_line(line, in_meta):
             if in_meta:
-                print 'meta:', line
+                match = re.match('(?P<key>[\w\-]+)\=(?P<value>.*)', line)
+                if match:
+                    k, v = match.groupdict()['key'], match.groupdict()['value']
+                    if 'id' == k:
+                        self.id = v.isdigit() and int(v) or None
+                    elif 'type' == k:
+                        assert(v in ('post',))
+                        self.post_type = v
+                    elif 'content_format' == k:
+                        assert(v in ('markdown', 'html',))
+                        self.content_format = v
+                    elif 'title' == k:
+                        self.title = v
+                    elif 'slug' == k:
+                        self.slug = v <> '<auto>' and v or None
+                    elif 'categories' == k:
+                        self.categories = parse_list_value(v)
+                    elif 'tags' == k:
+                        self.tags = parse_list_value(v)
+                    elif 'thumbnail' == k:
+                        self.thumbnail = v
+                        # TODO: turn to WpImage ...
+                    elif 'hemingwayapp-grade' == k:
+                        self.hemingway_grade = v.isdigit() and int(v) or None
             else:
                 self.content += line + '\n'
                 if self.content.endswith('\n\n\n'):

@@ -12,7 +12,7 @@ test_content = [
 title=Test Post with Title out of Div and = Symbol
 <div>slug=&lt;auto&gt;</div>
 <div>categories=Meta</div>
-<div>tags="Multiword Tag",test-tag</div>
+<div>tags="Multiword, Tag",test-tag</div>
 <div>thumbnail=<a href="evernote:///view/51788789/s295/decc63cf-60f7-42bd-babb-a6b1362b1d95/decc63cf-60f7-42bd-babb-a6b1362b1d95/" style="color: rgb(105, 170, 53);">test-thumb.png</a></div>
 <div>hemingwayapp-grade=8</div>
 <div><br/></div>
@@ -48,3 +48,13 @@ class TestEvernoteWpPostParser(unittest.TestCase):
     def test_evernote_post_parser(self):
         wp_post = WordPressPost.fromEvernote(test_content[0])
         self.assertEqual('post', wp_post.post_type)
+        self.assertEqual('markdown', wp_post.content_format)
+        self.assertEqual('Test Post with Title out of Div and = Symbol',
+                         wp_post.title)
+        self.assertEqual(8, wp_post.hemingway_grade)
+        self.assertListEqual(['Meta'], wp_post.categories)
+        self.assertListEqual(['Multiword, Tag','test-tag'], wp_post.tags)
+        self.assertIsNone(wp_post.id)
+        self.assertIsNone(wp_post.slug)
+        self.assertEqual('test-post-with-title-out-of-div-and-symbol',
+                         wp_post.get_slug())
