@@ -1,0 +1,3 @@
+Unidecode>=0.04.12
+evernote
+python-wordpress-xmlrpc>=2.0
