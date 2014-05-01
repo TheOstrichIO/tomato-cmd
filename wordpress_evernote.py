@@ -75,10 +75,25 @@ class WordPressImageAttachment():
         new_object._init_from_wp_media_item(wp_media_item)
         return new_object
     
+    @classmethod
+    def fromWpGenericItem(cls, wp_generic_item):
+        new_object = cls()
+        new_object._init_from_generic_wp_object(wp_generic_item)
+        return new_object
+    
+    def _init_from_generic_wp_object(self, wp_generic_item):
+        for slot in self._slots:
+            if not hasattr(wp_generic_item, slot):
+                logger.error('Generic WordPress object "%s" has no attribute '
+                             '%s"', wp_generic_item, slot)
+                raise RuntimeError()
+            self.__dict__[slot] = getattr(wp_generic_item, slot)
+        self.filename = self.link and UrlParser(self.link).path_parts()[-1]
+    
     def _init_from_wp_media_item(self, wp_media_item):
         for slot in self._slots:
             if not hasattr(wp_media_item, slot):
-                logger.error('WordPress MediaItem "%s" has not attribute "%s"',
+                logger.error('WordPress MediaItem "%s" has no attribute "%s"',
                              wp_media_item, slot)
                 raise RuntimeError()
             self.__dict__[slot] = getattr(wp_media_item, slot)
@@ -107,10 +122,10 @@ class WordPressPost():
         return new_post
     
     @classmethod
-    def fromEvernote(cls, en_wrapper, note_guid):
-        new_post = cls()
-        new_post._init_from_evernote(en_wrapper, note_guid)
-        return new_post
+    def fromWpGenericItem(cls, wp_generic_item):
+        new_object = cls()
+        new_object._init_from_generic_wp_object(wp_generic_item)
+        return new_object
     
     def __init__(self):
         for slot in self._slots:
@@ -134,20 +149,39 @@ class WordPressPost():
         # TODO: bring categories, tags, author, thumbnail, content
         # TODO: bring hemingway-grade and content format custom fields
     
-    def _init_from_evernote(self, en_wrapper, note_guid):
+    def _init_from_generic_wp_object(self, wp_generic_item):
+        for slot in self._slots:
+            if not hasattr(wp_generic_item, slot):
+                logger.error('Generic WordPress object "%s" has no attribute '
+                             '%s"', wp_generic_item, slot)
+                raise RuntimeError()
+            self.__dict__[slot] = getattr(wp_generic_item, slot)
+
+class GenericWordPressObject(object):
+    _slots = WordPressImageAttachment._slots.union(WordPressPost._slots)
+    
+    def __init__(self, en_wrapper, note_guid):
+        for slot in self._slots:
+            setattr(self, slot, None)
+        self.content = ''
+        self.tags = list()
+        self.categories = list()
+        self._en_wrapper = en_wrapper
+        self._note_guid = note_guid
+    
+    def fromEvernote(self):
         def fix_text(text):
             return text and text.lstrip('\n\r').rstrip(' \n\r\t') or ''
         def parse_link(atag):
-            # TODO: parse the link!
+            return atag.attrib['href']
             # depends on content-format!
             # in markdown - web-links should parse to the a.text,
             #  and Evernote links should load the related WpImage
             # luckily - I don't want to support other formats...
             href = atag.attrib.get('href', '')
             if href.startswith('evernote:///view/'):
-                note_link = en_wrapper.parseNoteLinkUrl(href)
-                # TODO: get link from note
-                return '<en-note(%s)>' % (note_link.noteGuid)
+                note_link = self._en_wrapper.parseNoteLinkUrl(href)
+                return note_link
             else:
                 return atag.text
         def parse_div(div):
@@ -202,15 +236,27 @@ class WordPressPost():
                         self.tags = parse_list_value(v)
                     elif 'thumbnail' == k:
                         self.thumbnail = v
-                        # TODO: turn to WpImage ...
                     elif 'hemingwayapp-grade' == k:
                         self.hemingway_grade = v.isdigit() and int(v) or None
+                    elif 'link' == k:
+                        self.link = v <> '<auto>' and v or None
+                    elif 'parent' == k:
+                        assert(v.startswith('evernote:///view/'))
+                        self.parent = v
+                    elif 'caption' == k:
+                        self.caption = v
+                    elif 'date_created' == k:
+                        self.date_created = v <> '<auto>' and v or None
+                    elif 'description' == k:
+                        self.description = v
+                    else:
+                        logger.warn('Unknown key "%s" (had value "%s")', k, v)
             else:
                 self.content += line + '\n'
                 if self.content.endswith('\n\n\n'):
                     self.content = self.content[:-1]
         # Start here
-        note = en_wrapper.getNote(note_guid)
+        note = self._en_wrapper.getNote(self._note_guid)
         root = ElementTree.fromstring(note.content)
         in_meta = True
         for e in root.iter():
@@ -219,6 +265,55 @@ class WordPressPost():
             elif 'div' == e.tag:
                 for line in parse_div(e):
                     parse_line(line, in_meta)
+            elif e.tag in ('en-note', 'en-media', 'en-todo', 'a', 'br'):
+                # en-note & en-media are not interesting
+                # a & br & en-todo are always parsed higher up
+                pass
+            else:
+                logger.warn('Unhandled tag "%s"', e)
+
+def getWordPressObjectAttr(en_wrapper, note_link, expected_type, attr):
+    wp_object = createWordPressObjectFromEvernoteNote(en_wrapper,
+          en_wrapper.parseNoteLinkUrl(note_link).noteGuid, False)
+    if not isinstance(wp_object, expected_type):
+        logger.error('Object "%s" is not a %s object',
+                     note_link, expected_type.__class__)
+        raise RuntimeError()
+    value = getattr(wp_object, attr)
+    if value is None:
+        logger.warn('Object "%s" has no ID.', wp_object)
+        return note_link
+    else:
+        return value
+
+def createWordPressObjectFromEvernoteNote(en_wrapper, note_guid,
+                                          recursive=True):
+    parsed_note = GenericWordPressObject(en_wrapper, note_guid)
+    parsed_note.fromEvernote()
+    if parsed_note.post_type and parsed_note.post_type in ('post',):
+        # it's a post item
+        wp_post = WordPressPost.fromWpGenericItem(parsed_note)
+        if recursive:
+            if wp_post.thumbnail.startswith('evernote:///view/'):
+                # get image link from image post
+                wp_post.thumbnail = getWordPressObjectAttr(en_wrapper,
+                                                   wp_post.thumbnail,
+                                                   WordPressImageAttachment,
+                                                   'link')
+            # TODO: repeat for content evernote:/// links
+        return wp_post
+    else:
+        # it's an image item
+        wp_image = WordPressImageAttachment.fromWpGenericItem(parsed_note)
+        if recursive and isinstance(wp_image.parent, str) and \
+                wp_image.parent.startswith('evernote:///view/'):
+            # get ID from parent post
+            wp_image.parent = getWordPressObjectAttr(en_wrapper,
+                                                     wp_image.parent,
+                                                     WordPressPost,
+                                                     'id')
+        return wp_image
+            
 
 class WordPressApiWrapper():
     
@@ -426,7 +521,8 @@ class EvernoteApiWrapper():
     @ratelimit_wait_and_retry
     def getNote(self, note_guid, with_content_flag=True):
         return self._note_store.getNote(self._client.token,
-                                        note_guid, with_content_flag)
+                                        note_guid, with_content_flag,
+                                        False, False, False)
 
 def save_wp_image_to_evernote(en_wrapper, notebook_name, wp_image,
                               force=False):
