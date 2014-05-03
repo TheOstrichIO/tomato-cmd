@@ -1,8 +1,8 @@
 import unittest
 from mock import patch
 
-from wordpress_evernote import WordPressPost, WordPressImageAttachment
-from wordpress_evernote import createWordPressObjectFromEvernoteNote
+from wordpress import WordPressPost, WordPressImageAttachment
+from wordpress import createWordPressObjectFromEvernoteNote
 from wordpress_evernote import EvernoteApiWrapper
 
 from collections import namedtuple

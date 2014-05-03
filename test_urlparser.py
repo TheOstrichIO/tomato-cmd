@@ -1,6 +1,6 @@
 import unittest
 
-from wordpress_evernote import UrlParser
+from common import UrlParser
 
 class TestUrlParser(unittest.TestCase):
     
