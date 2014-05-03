@@ -45,12 +45,14 @@ coverage.xml
 # Rope
 .ropeproject
 
+# Eclipse IDE
+.settings
+
 # Django stuff:
 *.log
 *.pot
 
 # Sphinx documentation
 docs/_build/
-
 
 local_settings.py
