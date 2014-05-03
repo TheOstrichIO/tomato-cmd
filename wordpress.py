@@ -17,43 +17,78 @@ import slugify
 
 import common
 from common import UrlParser
+from my_evernote import EvernoteApiWrapper
 
 logger = common.logger.getChild('wordpress')
 
-class WordPressImageAttachment():
-    
-    _slots = frozenset(('id', 'title', 'link', 'parent', 'caption',
-                        'date_created', 'description'))
+class MetaWordPressItem(type):
+    def __new__(cls, clsname, bases, dct):
+        newclass = super(MetaWordPressItem, cls).__new__(cls, clsname,
+                                                         bases, dct)
+        for base in bases:
+            if hasattr(base, 'register_specialization'):
+                base.register_specialization(newclass)
+        return newclass
+
+class WordPressItem(object):
+    """Generic WordPress item class.
+    Can be any of the specified `specialization` that has this as base class.
+    """
+    __metaclass__ = MetaWordPressItem
+    _specializations = list()
+    _all_slots = set()
+    _cache = dict()
     
     @classmethod
-    def fromWpMediaItem(cls, wp_media_item):
-        new_object = cls()
-        new_object._init_from_wp_media_item(wp_media_item)
-        return new_object
+    def register_specialization(cls, subclass):
+        cls._specializations.append(subclass)
+        cls._all_slots.update(subclass._slots)
     
     @classmethod
-    def fromWpGenericItem(cls, wp_generic_item):
-        new_object = cls()
-        new_object._init_from_generic_wp_object(wp_generic_item)
-        return new_object
+    def _get_note_from_guid_or_enlink(cls, guid_or_enlink, en_wrapper=None):
+        guid = guid_or_enlink
+        if guid.startswith('evernote:///view/'):
+            guid = EvernoteApiWrapper.parseNoteLinkUrl(guid_or_enlink).guid
+        if guid in cls._cache:
+            return cls._cache[guid]
+        assert(en_wrapper)
+        note = en_wrapper.getNote(guid)
+        cls._cache[guid] = note
+        return note
     
-    def _init_from_generic_wp_object(self, wp_generic_item):
-        for slot in self._slots:
-            if not hasattr(wp_generic_item, slot):
-                logger.error('Generic WordPress object "%s" has no attribute '
-                             '%s"', wp_generic_item, slot)
-                raise RuntimeError()
-            self.__dict__[slot] = getattr(wp_generic_item, slot)
-        self.filename = self.link and UrlParser(self.link).path_parts()[-1]
-    
-    def _init_from_wp_media_item(self, wp_media_item):
-        for slot in self._slots:
-            if not hasattr(wp_media_item, slot):
-                logger.error('WordPress MediaItem "%s" has no attribute "%s"',
-                             wp_media_item, slot)
-                raise RuntimeError()
-            self.__dict__[slot] = getattr(wp_media_item, slot)
-        self.filename = UrlParser(self.link).path_parts()[-1]
+    @classmethod
+    def createFromEvernote(cls, note_or_guid_or_enlink, en_wrapper=None):
+        note = note_or_guid_or_enlink
+        if isinstance(note, str):
+            guid = note_or_guid_or_enlink
+            if guid.startswith('evernote:///view/'):
+                guid = EvernoteApiWrapper.parseNoteLinkUrl(guid).noteGuid
+        else:
+            guid = note.guid
+        # return parsed note from cache, if cached
+        if guid in cls._cache:
+            return cls._cache[guid]
+        # not cached - parse and cache result
+        if isinstance(note, str):
+            assert(en_wrapper)
+            note = en_wrapper.getNote(guid)
+        parsed_item = cls()
+        parsed_item.initFromEvernote(note)
+        # Get item specialization by content
+        for subclass in cls._specializations:
+            if subclass.isInstance(parsed_item):
+                # reinterpret cast
+                parsed_item.__class__ = subclass
+                break
+        # process content Evernote links
+        #  (put partial parsing in cache for recursive link processing!)
+        cls._cache[guid] = parsed_item
+        parsed_item.processLinks(en_wrapper)
+        # cache and return
+        # is this necessary?
+        ##cls._cache[guid] = parsed_item
+        # seems not
+        return parsed_item
             
     def __unicode__(self):
         return u'<%s: %s (%s)>' % (self.__class__.__name__,
@@ -62,70 +97,14 @@ class WordPressImageAttachment():
     def __str__(self):
         return unicode(self).encode('utf-8')
     
-    def image(self):
-        "Returns a file-like object for reading image data."
-        return urllib2.urlopen(self.link)
-
-class WordPressPost():
-    _slots = frozenset(('id', 'title', 'slug', 'post_type',
-                        'post_status', 'content_format', 'content',
-                        'categories', 'tags', 'thumbnail', 'hemingway_grade'))
-    
-    @classmethod
-    def fromWpPost(cls, wp_post):
-        new_post = cls()
-        new_post._init_from_wp_post(wp_post)
-        return new_post
-    
-    @classmethod
-    def fromWpGenericItem(cls, wp_generic_item):
-        new_object = cls()
-        new_object._init_from_generic_wp_object(wp_generic_item)
-        return new_object
-    
     def __init__(self):
-        for slot in self._slots:
+        for slot in self._all_slots:
             setattr(self, slot, None)
         self.content = ''
         self.tags = list()
         self.categories = list()
     
-    def get_slug(self):
-        if self.slug:
-            return self.slug
-        elif self.title:
-            return slugify.slugify(self.title)
-    
-    def _init_from_wp_post(self, wp_post):
-        self.id = wp_post.id
-        self.title = wp_post.title
-        self.slug = wp_post.slug
-        self.post_type = wp_post.post_type
-        self.post_status = wp_post.post_status
-        # TODO: bring categories, tags, author, thumbnail, content
-        # TODO: bring hemingway-grade and content format custom fields
-    
-    def _init_from_generic_wp_object(self, wp_generic_item):
-        for slot in self._slots:
-            if not hasattr(wp_generic_item, slot):
-                logger.error('Generic WordPress object "%s" has no attribute '
-                             '%s"', wp_generic_item, slot)
-                raise RuntimeError()
-            self.__dict__[slot] = getattr(wp_generic_item, slot)
-
-class GenericWordPressObject(object):
-    _slots = WordPressImageAttachment._slots.union(WordPressPost._slots)
-    
-    def __init__(self, en_wrapper, note_guid):
-        for slot in self._slots:
-            setattr(self, slot, None)
-        self.content = ''
-        self.tags = list()
-        self.categories = list()
-        self._en_wrapper = en_wrapper
-        self._note_guid = note_guid
-    
-    def fromEvernote(self):
+    def initFromEvernote(self, note):
         def fix_text(text):
             return text and text.lstrip('\n\r').rstrip(' \n\r\t') or ''
         def parse_link(atag):
@@ -211,8 +190,8 @@ class GenericWordPressObject(object):
                 self.content += line + '\n'
                 if self.content.endswith('\n\n\n'):
                     self.content = self.content[:-1]
-        # Start here
-        note = self._en_wrapper.getNote(self._note_guid)
+        ## Start here
+        # Parse Evernote note content
         root = ElementTree.fromstring(note.content)
         in_meta = True
         for e in root.iter():
@@ -228,50 +207,95 @@ class GenericWordPressObject(object):
             else:
                 logger.warn('Unhandled tag "%s"', e)
 
-def getWordPressObjectAttr(en_wrapper, note_link, expected_type, attr):
-    wp_object = createWordPressObjectFromEvernoteNote(en_wrapper,
-          en_wrapper.parseNoteLinkUrl(note_link).noteGuid, False)
-    if not isinstance(wp_object, expected_type):
-        logger.error('Object "%s" is not a %s object',
-                     note_link, expected_type.__class__)
-        raise RuntimeError()
-    value = getattr(wp_object, attr)
-    if value is None:
-        logger.warn('Object "%s" has no ID.', wp_object)
-        return note_link
-    else:
-        return value
+class WordPressImageAttachment(WordPressItem):
+    
+    _slots = frozenset(('id', 'title', 'link', 'parent', 'caption',
+                        'date_created', 'description'))
+    
+    @classmethod
+    def isInstance(cls, instance):
+        return (instance.post_type and instance.post_type in ('image',)) \
+            or instance.post_type is None
+    
+    @classmethod
+    def fromWpMediaItem(cls, wp_media_item):
+        new_object = cls()
+        new_object._init_from_wp_media_item(wp_media_item)
+        return new_object
+    
+    def _init_from_wp_media_item(self, wp_media_item):
+        for slot in self._slots:
+            if not hasattr(wp_media_item, slot):
+                logger.error('WordPress MediaItem "%s" has no attribute "%s"',
+                             wp_media_item, slot)
+                raise RuntimeError()
+            self.__dict__[slot] = getattr(wp_media_item, slot)
+        self.filename = UrlParser(self.link).path_parts()[-1]
+    
+    def processLinks(self, en_wrapper=None):
+        if self.parent.startswith('evernote:///view/'):
+            parent_item = WordPressItem.createFromEvernote(self.parent,
+                                                           en_wrapper)
+            if parent_item.id:
+                self.parent = parent_item.id
+            else:
+                logger.warn('Parent item "%s" has no ID', parent_item)
+    
+    def image(self):
+        "Returns a file-like object for reading image data."
+        return urllib2.urlopen(self.link)
+        # TODO: handle case of Evernote resource...
 
-def createWordPressObjectFromEvernoteNote(en_wrapper, note_guid,
-                                          recursive=True):
-    parsed_note = GenericWordPressObject(en_wrapper, note_guid)
-    parsed_note.fromEvernote()
-    if parsed_note.post_type and parsed_note.post_type in ('post',):
-        # it's a post item
-        wp_post = WordPressPost.fromWpGenericItem(parsed_note)
-        if recursive:
-            if wp_post.thumbnail.startswith('evernote:///view/'):
-                # get image link from image post
-                wp_post.thumbnail = getWordPressObjectAttr(en_wrapper,
-                                                   wp_post.thumbnail,
-                                                   WordPressImageAttachment,
-                                                   'link')
-            # TODO: repeat for content evernote:/// links
-        return wp_post
-    else:
-        # it's an image item
-        wp_image = WordPressImageAttachment.fromWpGenericItem(parsed_note)
-        if recursive and isinstance(wp_image.parent, str) and \
-                wp_image.parent.startswith('evernote:///view/'):
-            # get ID from parent post
-            wp_image.parent = getWordPressObjectAttr(en_wrapper,
-                                                     wp_image.parent,
-                                                     WordPressPost,
-                                                     'id')
-        return wp_image
-            
+class WordPressPost(WordPressItem):
+    _slots = frozenset(('id', 'title', 'slug', 'post_type',
+                        'post_status', 'content_format', 'content',
+                        'categories', 'tags', 'thumbnail', 'hemingway_grade'))
+    
+    @classmethod
+    def isInstance(cls, instance):
+        return instance.post_type and instance.post_type in ('post',)
+    
+    @classmethod
+    def fromWpPost(cls, wp_post):
+        new_post = cls()
+        new_post._init_from_wp_post(wp_post)
+        return new_post
+    
+    def __init__(self):
+        for slot in self._slots:
+            setattr(self, slot, None)
+        self.content = ''
+        self.tags = list()
+        self.categories = list()
+    
+    def get_slug(self):
+        if self.slug:
+            return self.slug
+        elif self.title:
+            return slugify.slugify(self.title)
+    
+    def processLinks(self, en_wrapper=None):
+        def enlink_to_url(enlink):
+            if enlink.startswith('evernote:///view/'):
+                item = WordPressItem.createFromEvernote(enlink, en_wrapper)
+                if item.link:
+                    return item.link
+                else:
+                    logger.warn('Item "%s" has no link', item)
+                    return enlink
+        self.thumbnail = enlink_to_url(self.thumbnail)
+        # TODO: repeat for content evernote:/// links
+    
+    def _init_from_wp_post(self, wp_post):
+        self.id = wp_post.id
+        self.title = wp_post.title
+        self.slug = wp_post.slug
+        self.post_type = wp_post.post_type
+        self.post_status = wp_post.post_status
+        # TODO: bring categories, tags, author, thumbnail, content
+        # TODO: bring hemingway-grade and content format custom fields
 
-class WordPressApiWrapper():
+class WordPressApiWrapper(object):
     
     def __init__(self, xmlrpc_url, username, password):
         self._wp = Client(xmlrpc_url, username, password)

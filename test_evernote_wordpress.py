@@ -1,8 +1,7 @@
 import unittest
 from mock import patch
 
-from wordpress import WordPressPost, WordPressImageAttachment
-from wordpress import createWordPressObjectFromEvernoteNote
+from wordpress import WordPressPost, WordPressImageAttachment, WordPressItem
 from wordpress_evernote import EvernoteApiWrapper
 
 from collections import namedtuple
@@ -68,12 +67,12 @@ title=Test Post with Title out of Div and = Symbol
 <!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
 <en-note style="word-wrap: break-word; -webkit-nbsp-mode: space; -webkit-line-break: after-white-space;">
 <div>id=&lt;auto&gt;</div>
-<div>title=Quick Evernote note creation with Launchy</div>
+<div>title=Test image</div>
 <div>link=&lt;auto&gt;</div>
 <div>parent=<a href="evernote:///view/123/s123/abcd1234-5678-abcd-7890-abcd1234abcd/abcd1234-5678-abcd-7890-abcd1234abcd/" style="color: rgb(105, 170, 53);">Side project workflow</a></div>
 <div>caption=</div>
 <div>date_created=&lt;auto&gt;</div>
-<div>description=Quick Evernote note creation with Launchy</div>
+<div>description=Description of test image</div>
 <div><br/></div>
 <div>
 <hr/></div>
@@ -119,24 +118,24 @@ class TestEvernoteWordPressParser(unittest.TestCase):
     @patch('wordpress_evernote.EvernoteApiWrapper.getNote',
            new_callable=lambda: mocked_get_note)
     def test_evernote_image_parser(self, mock_note_getter):
-        wp_image = createWordPressObjectFromEvernoteNote(self.evernote,
-                                                         test_notes[1].guid)
+        wp_image = WordPressItem.createFromEvernote(test_notes[1].guid,
+                                                    self.evernote)
         self.assertIsInstance(wp_image, WordPressImageAttachment)
         self.assertIsNone(wp_image.id)
-        self.assertEqual('Quick Evernote note creation with Launchy',
+        self.assertEqual('Test image',
                          wp_image.title)
         self.assertIsNone(wp_image.link)
         self.assertEqual('', wp_image.caption)
         self.assertIsNone(wp_image.date_created)
-        self.assertEqual('Quick Evernote note creation with Launchy',
+        self.assertEqual('Description of test image',
                          wp_image.description)
         self.assertEqual(544, wp_image.parent)
     
     @patch('wordpress_evernote.EvernoteApiWrapper.getNote',
            new_callable=lambda: mocked_get_note)
     def test_evernote_post_parser(self, mock_note_getter):
-        wp_post = createWordPressObjectFromEvernoteNote(self.evernote,
-                                                        test_notes[0].guid)
+        wp_post = WordPressItem.createFromEvernote(test_notes[0].guid,
+                                                   self.evernote)
         self.assertIsInstance(wp_post, WordPressPost)
         self.assertEqual('post', wp_post.post_type)
         self.assertEqual('markdown', wp_post.content_format)
