@@ -96,7 +96,7 @@ First line after markdown list, followed by line that contains only a "comment"
 
 <!--more-->
 
-Line with image tag pointing to image-note as Evernote linked note: ![evernote:///view/123/s123/abcd1234-1234-abcd-1234-abcd1234abcd/abcd1234-1234-abcd-1234-abcd1234abcd/]
+Line with image tag pointing to image-note as Evernote linked note: ![http://www.ostricher.com/images/test.png]
 
 Line with Evernote TODO checkbox followed by some text (&#x2751;do this better). Parser should warn.
 
@@ -151,4 +151,5 @@ class TestEvernoteWordPressParser(unittest.TestCase):
                          wp_post.get_slug())
         self.assertEqual('http://www.ostricher.com/images/test.png',
                          wp_post.thumbnail)
-        self.assertEqual(expected_content[0], wp_post.content)
+        self.assertListEqual(expected_content[0].split('\n'),
+                             wp_post.content.split('\n'))
