@@ -19,6 +19,10 @@ import common
 
 logger = common.logger.getChild('my-evernote')
 
+note_link_re = re.compile('evernote\:\/\/\/view\/(?P<uid>\d+)/(?P<sid>s\d+)\/'
+                          '(?P<note_id>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-'
+                          '[0-9a-f]{4}-[0-9a-f]{12})\/(?P=note_id)\/')
+
 def ratelimit_wait_and_retry(func):
     def runner(*args, **kwargs):
         while True:
@@ -95,11 +99,7 @@ class EvernoteApiWrapper():
         (e.g. no `client specific id` and `linked notebook guid`)
         """
         link = namedtuple('EvernoteLink', ['user_id', 'shard_id', 'noteGuid',])
-        note_link_match = re.match('evernote\:\/\/\/view\/'
-                                   '(?P<uid>\d+)/(?P<sid>s\d+)\/'
-                                   '(?P<note_id>[0-9a-f]{8}-[0-9a-f]{4}-'
-                                   '[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})'
-                                   '\/(?P=note_id)\/', url)
+        note_link_match = note_link_re.match(url)
         if note_link_match:
             d = note_link_match.groupdict()
             link.user_id = d['uid']

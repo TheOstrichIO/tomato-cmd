@@ -17,7 +17,7 @@ import slugify
 
 import common
 from common import UrlParser
-from my_evernote import EvernoteApiWrapper
+from my_evernote import EvernoteApiWrapper, note_link_re
 
 logger = common.logger.getChild('wordpress')
 
@@ -282,8 +282,12 @@ class WordPressPost(WordPressItem):
                 else:
                     logger.warn('Item "%s" has no link', item)
                     return enlink
+        # parse thumbnail image link
         self.thumbnail = enlink_to_url(self.thumbnail)
-        # TODO: repeat for content evernote:/// links
+        # replace all evernote:/// links within content
+        # TODO: escaping?
+        self.content = note_link_re.sub(lambda m: enlink_to_url(m.group(0)),
+                                        self.content)
     
     def _init_from_wp_post(self, wp_post):
         self.id = wp_post.id
