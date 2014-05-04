@@ -108,15 +108,14 @@ class WordPressItem(object):
         def fix_text(text):
             return text and text.lstrip('\n\r').rstrip(' \n\r\t') or ''
         def parse_link(atag):
-            return atag.attrib['href']
             # depends on content-format!
             # in markdown - web-links should parse to the a.text,
             #  and Evernote links should load the related WpImage
             # luckily - I don't want to support other formats...
-            href = atag.attrib.get('href', '')
-            if href.startswith('evernote:///view/'):
-                note_link = self._en_wrapper.parseNoteLinkUrl(href)
-                return note_link
+            url = atag.attrib.get('href', '')
+            if url.startswith('evernote:///view/'):
+                #note_link = self._en_wrapper.parseNoteLinkUrl(href)
+                return url
             else:
                 return atag.text
         def parse_div(div):

@@ -57,7 +57,7 @@ title=Test Post with Title out of Div and = Symbol
 <div><br/></div>
 <div>Line with Evernote TODO checkbox followed by some text (<en-todo/>do this better). Parser should warn.</div>
 <div><br/></div>
-<div>Finish with one [link with a tag](<a href="http://www.ostricher.com/">https://www.ostricher.com/</a>), and [one link with no a tag but with title](http://www.ostricher.com/ "Ostricher.com site"), followed by some text.</div>
+<div>Finish with one [link with a tag](<a href="http://www.ostricher.com/">http://www.ostricher.com/</a>), and [one link with no a tag but with title](http://www.ostricher.com/ "Ostricher.com site"), followed by some text.</div>
 </en-note>"""),
        EvernoteNote(guid='abcd1234-1234-abcd-1234-abcd1234abcd',
                     title='Test image note',
@@ -68,7 +68,7 @@ title=Test Post with Title out of Div and = Symbol
 <en-note style="word-wrap: break-word; -webkit-nbsp-mode: space; -webkit-line-break: after-white-space;">
 <div>id=&lt;auto&gt;</div>
 <div>title=Test image</div>
-<div>link=&lt;auto&gt;</div>
+<div>link=http://www.ostricher.com/images/test.png</div>
 <div>parent=<a href="evernote:///view/123/s123/abcd1234-5678-abcd-7890-abcd1234abcd/abcd1234-5678-abcd-7890-abcd1234abcd/" style="color: rgb(105, 170, 53);">Side project workflow</a></div>
 <div>caption=</div>
 <div>date_created=&lt;auto&gt;</div>
@@ -124,7 +124,8 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         self.assertIsNone(wp_image.id)
         self.assertEqual('Test image',
                          wp_image.title)
-        self.assertIsNone(wp_image.link)
+        self.assertEqual('http://www.ostricher.com/images/test.png',
+                         wp_image.link)
         self.assertEqual('', wp_image.caption)
         self.assertIsNone(wp_image.date_created)
         self.assertEqual('Description of test image',
@@ -148,8 +149,6 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         self.assertIsNone(wp_post.slug)
         self.assertEqual('test-post-with-title-out-of-div-and-symbol',
                          wp_post.get_slug())
-        self.assertEqual('evernote:///view/123/s123/'
-                         'abcd1234-1234-abcd-1234-abcd1234abcd/'
-                         'abcd1234-1234-abcd-1234-abcd1234abcd/',
+        self.assertEqual('http://www.ostricher.com/images/test.png',
                          wp_post.thumbnail)
         self.assertEqual(expected_content[0], wp_post.content)
