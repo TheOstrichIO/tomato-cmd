@@ -106,7 +106,7 @@ class WordPressItem(object):
     
     def initFromEvernote(self, note):
         def fix_text(text):
-            return text and text.lstrip('\n\r').rstrip(' \n\r\t') or ''
+            return text and text.strip('\n\r') or ''
         def parse_link(atag):
             # depends on content-format!
             # in markdown - web-links should parse to the a.text,
@@ -231,6 +231,16 @@ class WordPressImageAttachment(WordPressItem):
             self.__dict__[slot] = getattr(wp_media_item, slot)
         self.filename = UrlParser(self.link).path_parts()[-1]
     
+    def formatContentLink(self):
+        if self.link and self.id:
+            imtag = '<a href="%s"><img src="%s" class="wp-image-%d" %s/>' \
+                '</a>' % (self.link, self.link, self.id,
+                self.description and 'alt="%s" ' % (self.description) or '')
+            if self.caption:
+                return '[caption id="attachment_%d" align="alignnone"]%s %s' \
+                       '[/caption]' % (self.id, imtag, self.caption)
+            return imtag
+    
     def processLinks(self, en_wrapper=None):
         if self.parent.startswith('evernote:///view/'):
             parent_item = WordPressItem.createFromEvernote(self.parent,
@@ -273,23 +283,30 @@ class WordPressPost(WordPressItem):
         elif self.title:
             return slugify.slugify(self.title)
     
+    def formatContentLink(self):
+        if self.link:
+            if self.title:
+                return '%s "%s"' % (self.link, self.title.replace('"', ''))
+            else:
+                return self.link
+    
     def processLinks(self, en_wrapper=None):
-        def enlink_to_url(enlink):
-            if enlink.startswith('evernote:///view/'):
-                item = WordPressItem.createFromEvernote(enlink, en_wrapper)
-                if item.link:
-                    return item.link
-                else:
-                    logger.warn('Item "%s" has no link', item)
-                    return enlink
+        def parse_content_link(match_obj):
+            enlink = match_obj.group(0)
+            item = WordPressItem.createFromEvernote(enlink, en_wrapper)
+            link = item.formatContentLink()
+            if link:
+                return link
+            else:
+                logger.warn('Could not format content link for "%s"', item)
+                return enlink
         # parse thumbnail image link
         if self.thumbnail.startswith('evernote:///view/'):
             self.thumbnail = WordPressItem.createFromEvernote(self.thumbnail,
                                                               en_wrapper)
         # replace all evernote:/// links within content
         # TODO: escaping?
-        self.content = note_link_re.sub(lambda m: enlink_to_url(m.group(0)),
-                                        self.content)
+        self.content = note_link_re.sub(parse_content_link, self.content)
     
     def _init_from_wp_post(self, wp_post):
         self.id = wp_post.id

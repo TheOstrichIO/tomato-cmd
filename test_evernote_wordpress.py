@@ -53,9 +53,11 @@ title=Test Post with Title out of Div and = Symbol
 <div><br/></div>
 <div>&lt;!--more--&gt;</div>
 <div><br/></div>
-<div>Line with image tag pointing to image-note as Evernote linked note: ![<a href="evernote:///view/123/s123/abcd1234-1234-abcd-1234-abcd1234abcd/abcd1234-1234-abcd-1234-abcd1234abcd/" style="color: rgb(105, 170, 53);">test-thumb.png</a>]</div>
+<div>Line with image tag pointing to image-note as Evernote linked note: <a href="evernote:///view/123/s123/abcd1234-1234-abcd-1234-abcd1234abcd/abcd1234-1234-abcd-1234-abcd1234abcd/" style="color: rgb(105, 170, 53);">test-thumb.png</a></div>
 <div><br/></div>
 <div>Line with Evernote TODO checkbox followed by some text (<en-todo/>do this better). Parser should warn.</div>
+<div><br/></div>
+<div>And here's a [link to an existing post](<a href="evernote:///view/123/s123/abcd1234-5678-0000-7890-abcd1234abcd/abcd1234-5678-0000-7890-abcd1234abcd/" style="color: rgb(105, 170, 53);">Another test note</a>)!</div>
 <div><br/></div>
 <div>Finish with one [link with a tag](<a href="http://www.ostricher.com/">http://www.ostricher.com/</a>), and [one link with no a tag but with title](http://www.ostricher.com/ "Ostricher.com site"), followed by some text.</div>
 </en-note>"""),
@@ -66,17 +68,40 @@ title=Test Post with Title out of Div and = Symbol
 """<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
 <en-note style="word-wrap: break-word; -webkit-nbsp-mode: space; -webkit-line-break: after-white-space;">
-<div>id=&lt;auto&gt;</div>
+<div>id=277</div>
 <div>title=Test image</div>
 <div>link=http://www.ostricher.com/images/test.png</div>
-<div>parent=<a href="evernote:///view/123/s123/abcd1234-5678-abcd-7890-abcd1234abcd/abcd1234-5678-abcd-7890-abcd1234abcd/" style="color: rgb(105, 170, 53);">Side project workflow</a></div>
-<div>caption=</div>
+<div>parent=<a href="evernote:///view/123/s123/abcd1234-5678-abcd-7890-abcd1234abcd/abcd1234-5678-abcd-7890-abcd1234abcd/" style="color: rgb(105, 170, 53);">Test post note</a></div>
+<div>caption=Image caption</div>
 <div>date_created=&lt;auto&gt;</div>
 <div>description=Description of test image</div>
 <div><br/></div>
 <div>
 <hr/></div>
 <en-media style="height: auto; cursor: default;" type="image/png" hash="8be6578fee9f8c3ce979a909ae297500"/>
+</en-note>"""),
+       EvernoteNote(guid='abcd1234-5678-0000-7890-abcd1234abcd',
+                    title='Another test note',
+                    notebookGuid='abcd1234-5678-abef-7890-abcd1234abcd',
+                    content=
+"""<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
+<en-note style="word-wrap: break-word; -webkit-nbsp-mode: space; -webkit-line-break: after-white-space;">
+<div>id=303</div>
+<div>type=post</div>
+<div>content_format=markdown</div>
+title=Another test note
+<div>slug=&lt;auto&gt;</div>
+<div>categories=</div>
+<div>tags=</div>
+<div>thumbnail=</div>
+<div>hemingwayapp-grade=8</div>
+<div>link=http://www.ostricher.com/2014/04/another-test-note</div>
+<div><br/></div>
+<div>
+<hr/></div>
+<br/>
+<div>Nothing to see here.</div>
 </en-note>"""),
 ]
 
@@ -96,9 +121,11 @@ First line after markdown list, followed by line that contains only a "comment"
 
 <!--more-->
 
-Line with image tag pointing to image-note as Evernote linked note: ![http://www.ostricher.com/images/test.png]
+Line with image tag pointing to image-note as Evernote linked note: [caption id="attachment_277" align="alignnone"]<a href="http://www.ostricher.com/images/test.png"><img src="http://www.ostricher.com/images/test.png" class="wp-image-277" alt="Description of test image" /></a> Image caption[/caption]
 
 Line with Evernote TODO checkbox followed by some text (&#x2751;do this better). Parser should warn.
+
+And here's a [link to an existing post](http://www.ostricher.com/2014/04/another-test-note "Another test note")!
 
 Finish with one [link with a tag](http://www.ostricher.com/), and [one link with no a tag but with title](http://www.ostricher.com/ "Ostricher.com site"), followed by some text.
 """,
@@ -121,12 +148,11 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         wp_image = WordPressItem.createFromEvernote(test_notes[1].guid,
                                                     self.evernote)
         self.assertIsInstance(wp_image, WordPressImageAttachment)
-        self.assertIsNone(wp_image.id)
-        self.assertEqual('Test image',
-                         wp_image.title)
+        self.assertEqual(277, wp_image.id)
+        self.assertEqual('Test image', wp_image.title)
         self.assertEqual('http://www.ostricher.com/images/test.png',
                          wp_image.link)
-        self.assertEqual('', wp_image.caption)
+        self.assertEqual('Image caption', wp_image.caption)
         self.assertIsNone(wp_image.date_created)
         self.assertEqual('Description of test image',
                          wp_image.description)
