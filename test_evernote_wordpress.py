@@ -149,7 +149,8 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         self.assertIsNone(wp_post.slug)
         self.assertEqual('test-post-with-title-out-of-div-and-symbol',
                          wp_post.get_slug())
+        self.assertIsInstance(wp_post.thumbnail, WordPressImageAttachment)
         self.assertEqual('http://www.ostricher.com/images/test.png',
-                         wp_post.thumbnail)
+                         wp_post.thumbnail.link)
         self.assertListEqual(expected_content[0].split('\n'),
                              wp_post.content.split('\n'))

@@ -283,7 +283,9 @@ class WordPressPost(WordPressItem):
                     logger.warn('Item "%s" has no link', item)
                     return enlink
         # parse thumbnail image link
-        self.thumbnail = enlink_to_url(self.thumbnail)
+        if self.thumbnail.startswith('evernote:///view/'):
+            self.thumbnail = WordPressItem.createFromEvernote(self.thumbnail,
+                                                              en_wrapper)
         # replace all evernote:/// links within content
         # TODO: escaping?
         self.content = note_link_re.sub(lambda m: enlink_to_url(m.group(0)),
