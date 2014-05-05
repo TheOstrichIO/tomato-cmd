@@ -114,8 +114,8 @@ class WordPressItem(object):
             # luckily - I don't want to support other formats...
             url = atag.attrib.get('href', '')
             if url.startswith('evernote:///view/'):
-                #note_link = self._en_wrapper.parseNoteLinkUrl(href)
-                return url
+                # surround in <> to allow secondary parsing
+                return '<%s>' % (url)
             else:
                 return atag.text
         def parse_div(div):
@@ -169,12 +169,14 @@ class WordPressItem(object):
                     elif 'tags' == k:
                         self.tags = parse_list_value(v)
                     elif 'thumbnail' == k:
+                        v = v.strip('<>')
                         self.thumbnail = v
                     elif 'hemingwayapp-grade' == k:
                         self.hemingway_grade = v.isdigit() and int(v) or None
                     elif 'link' == k:
                         self.link = v <> '<auto>' and v or None
                     elif 'parent' == k:
+                        v = v.strip('<>')
                         assert(v.startswith('evernote:///view/'))
                         self.parent = v
                     elif 'caption' == k:
@@ -292,21 +294,21 @@ class WordPressPost(WordPressItem):
     
     def processLinks(self, en_wrapper=None):
         def parse_content_link(match_obj):
-            enlink = match_obj.group(0)
+            enlink = match_obj.group(1)
             item = WordPressItem.createFromEvernote(enlink, en_wrapper)
             link = item.formatContentLink()
             if link:
                 return link
             else:
                 logger.warn('Could not format content link for "%s"', item)
-                return enlink
+                return match_obj.group(0)
         # parse thumbnail image link
         if self.thumbnail.startswith('evernote:///view/'):
             self.thumbnail = WordPressItem.createFromEvernote(self.thumbnail,
                                                               en_wrapper)
-        # replace all evernote:/// links within content
-        # TODO: escaping?
-        self.content = note_link_re.sub(parse_content_link, self.content)
+        # replace all <evernote:///...> links within content
+        link_pattern = '\<(%s)\>' % (note_link_re.pattern)
+        self.content = re.sub(link_pattern, parse_content_link, self.content)
     
     def _init_from_wp_post(self, wp_post):
         self.id = wp_post.id
