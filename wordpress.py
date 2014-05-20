@@ -211,7 +211,7 @@ class WordPressItem(object):
 class WordPressImageAttachment(WordPressItem):
     
     _slots = frozenset(('id', 'title', 'link', 'parent', 'caption',
-                        'date_created', 'description'))
+                        'date_created', 'description')) # what's with alt?!
     
     @classmethod
     def isInstance(cls, instance):
@@ -258,7 +258,7 @@ class WordPressImageAttachment(WordPressItem):
         # TODO: handle case of Evernote resource...
 
 class WordPressPost(WordPressItem):
-    _slots = frozenset(('id', 'title', 'slug', 'post_type',
+    _slots = frozenset(('id', 'title', 'slug', 'post_type', 'author',
                         'post_status', 'content_format', 'content',
                         'categories', 'tags', 'thumbnail', 'hemingway_grade'))
     
@@ -307,6 +307,8 @@ class WordPressPost(WordPressItem):
             self.thumbnail = WordPressItem.createFromEvernote(self.thumbnail,
                                                               en_wrapper)
         # replace all <evernote:///...> links within content
+        # TODO: maybe match entire Markdown link?
+        #  (so I don't override the title if it is specified)
         link_pattern = '\<(%s)\>' % (note_link_re.pattern)
         self.content = re.sub(link_pattern, parse_content_link, self.content)
     
