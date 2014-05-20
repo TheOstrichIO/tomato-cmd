@@ -204,6 +204,11 @@ class EvernoteApiWrapper():
     def updateNote(self, note):
         self._note_store.updateNote(self._client.token, note)
     
+    """Get Evernote Note object by GUID
+    
+    @param `note_guid`: The requested note GUID
+    @param `with_content_flag`: If `True`, includes note content in response
+    """
     @ratelimit_wait_and_retry
     def getNote(self, note_guid, with_content_flag=True):
         return self._note_store.getNote(self._client.token,
