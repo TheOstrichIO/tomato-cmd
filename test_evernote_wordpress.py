@@ -95,8 +95,29 @@ title=Another test note
 <div>categories=</div>
 <div>tags=</div>
 <div>thumbnail=</div>
+<div>project=<a href="evernote:///view/123/s123/abcd1234-aaaa-0000-ffff-abcd1234abcd/abcd1234-aaaa-0000-ffff-abcd1234abcd/" style="color: rgb(105, 170, 53);">Project index</a></div>
 <div>hemingwayapp-grade=8</div>
 <div>link=http://www.ostricher.com/2014/04/another-test-note</div>
+<div><br/></div>
+<div>
+<hr/></div>
+<br/>
+<div>Nothing to see here.</div>
+</en-note>"""),
+       EvernoteNote(guid='abcd1234-aaaa-0000-ffff-abcd1234abcd',
+                    title='Test project index page',
+                    notebookGuid='abcd1234-5678-1928-7890-abcd1234abcd',
+                    content=
+"""<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
+<en-note style="word-wrap: break-word; -webkit-nbsp-mode: space; -webkit-line-break: after-white-space;">
+<div>id=583</div>
+<div>type=page</div>
+<div>content_format=markdown</div>
+title=Project index
+<div>slug=&lt;auto&gt;</div>
+<div>thumbnail=</div>
+<div>link=http://www.ostricher.com/projects/test-project</div>
 <div><br/></div>
 <div>
 <hr/></div>
@@ -180,3 +201,43 @@ class TestEvernoteWordPressParser(unittest.TestCase):
                          wp_post.thumbnail.link)
         self.assertListEqual(expected_content[0].split('\n'),
                              wp_post.content.split('\n'))
+    
+    @patch('wordpress_evernote.EvernoteApiWrapper.getNote',
+           new_callable=lambda: mocked_get_note)
+    def test_evernote_page_parser(self, mock_note_getter):
+        wp_post = WordPressItem.createFromEvernote(test_notes[3].guid,
+                                                   self.evernote)
+        self.assertIsInstance(wp_post, WordPressPost)
+        self.assertEqual('page', wp_post.post_type)
+        self.assertEqual('markdown', wp_post.content_format)
+        self.assertEqual('Project index', wp_post.title)
+        self.assertIsNone(wp_post.hemingway_grade)
+        self.assertListEqual([], wp_post.categories)
+        self.assertListEqual([], wp_post.tags)
+        self.assertEqual(583, wp_post.id)
+        self.assertIsNone(wp_post.slug)
+        self.assertEqual('project-index',
+                         wp_post.get_slug())
+        self.assertEqual('', wp_post.thumbnail)
+        self.assertEqual("Nothing to see here.\n", wp_post.content)
+    
+    @patch('wordpress_evernote.EvernoteApiWrapper.getNote',
+           new_callable=lambda: mocked_get_note)
+    def test_evernote_project_post_parser(self, mock_note_getter):
+        wp_post = WordPressItem.createFromEvernote(test_notes[2].guid,
+                                                   self.evernote)
+        self.assertIsInstance(wp_post, WordPressPost)
+        self.assertEqual('post', wp_post.post_type)
+        self.assertEqual('markdown', wp_post.content_format)
+        self.assertEqual('Another test note', wp_post.title)
+        self.assertEqual(8, wp_post.hemingway_grade)
+        self.assertListEqual([], wp_post.categories)
+        self.assertListEqual([], wp_post.tags)
+        self.assertEqual(303, wp_post.id)
+        self.assertIsNone(wp_post.slug)
+        self.assertEqual('another-test-note',
+                         wp_post.get_slug())
+        self.assertEqual('', wp_post.thumbnail)
+        self.assertEqual("Nothing to see here.\n", wp_post.content)
+        self.assertIsInstance(wp_post.project, WordPressPost)
+        self.assertEqual(583, wp_post.project.id)

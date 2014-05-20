@@ -74,7 +74,7 @@ class WordPressItem(object):
             note = en_wrapper.getNote(guid)
         parsed_item = cls()
         parsed_item.initFromEvernote(note)
-        # Get item specialization by content
+        # Get item specialization
         for subclass in cls._specializations:
             if subclass.isInstance(parsed_item):
                 # reinterpret cast
@@ -84,10 +84,6 @@ class WordPressItem(object):
         #  (put partial parsing in cache for recursive link processing!)
         cls._cache[guid] = parsed_item
         parsed_item.processLinks(en_wrapper)
-        # cache and return
-        # is this necessary?
-        ##cls._cache[guid] = parsed_item
-        # seems not
         return parsed_item
             
     def __unicode__(self):
@@ -155,7 +151,8 @@ class WordPressItem(object):
                     if 'id' == k:
                         self.id = v.isdigit() and int(v) or None
                     elif 'type' == k:
-                        assert(v in ('post',))
+                        # TODO: refactor getting list of types
+                        assert(v in ('post', 'page', ))
                         self.post_type = v
                     elif 'content_format' == k:
                         assert(v in ('markdown', 'html',))
@@ -179,6 +176,12 @@ class WordPressItem(object):
                         v = v.strip('<>')
                         assert(v.startswith('evernote:///view/'))
                         self.parent = v
+                    elif 'project' == k:
+                        # TODO: refactor field processing to something modular
+                        # e.g., don't hardcode custom fields here...
+                        v = v.strip('<>')
+                        assert(v.startswith('evernote:///view/'))
+                        self.project = v
                     elif 'caption' == k:
                         self.caption = v
                     elif 'date_created' == k:
@@ -260,11 +263,16 @@ class WordPressImageAttachment(WordPressItem):
 class WordPressPost(WordPressItem):
     _slots = frozenset(('id', 'title', 'slug', 'post_type', 'author',
                         'post_status', 'content_format', 'content',
-                        'categories', 'tags', 'thumbnail', 'hemingway_grade'))
+                        'categories', 'tags', 'thumbnail', 'hemingway_grade',
+                        # Custom fields
+                        # TODO: refactor fields handling to be modular and
+                        #       extensible, without hardcoded (custom) fields
+                        'project',))
     
     @classmethod
     def isInstance(cls, instance):
-        return instance.post_type and instance.post_type in ('post',)
+        # TODO: refactor getting list of types
+        return instance.post_type and instance.post_type in ('post', 'page', )
     
     @classmethod
     def fromWpPost(cls, wp_post):
@@ -302,10 +310,15 @@ class WordPressPost(WordPressItem):
             else:
                 logger.warn('Could not format content link for "%s"', item)
                 return match_obj.group(0)
+        # TODO: refactor fields processing such that the fields themselves
+        #       define their processing (instead of hardcoding here)
         # parse thumbnail image link
-        if self.thumbnail.startswith('evernote:///view/'):
+        if self.thumbnail and self.thumbnail.startswith('evernote:///view/'):
             self.thumbnail = WordPressItem.createFromEvernote(self.thumbnail,
                                                               en_wrapper)
+        if self.project and self.project.startswith('evernote:///view/'):
+            self.project = WordPressItem.createFromEvernote(self.project,
+                                                            en_wrapper)
         # replace all <evernote:///...> links within content
         # TODO: maybe match entire Markdown link?
         #  (so I don't override the title if it is specified)
