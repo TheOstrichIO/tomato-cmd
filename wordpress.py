@@ -7,7 +7,9 @@ import urllib2
 import re
 
 # WordPress API:
+import wordpress_xmlrpc
 from wordpress_xmlrpc import Client #, WordPressPost
+from wordpress_xmlrpc import WordPressPost as XmlRpcPost
 #from wordpress_xmlrpc.methods.posts import GetPosts, NewPost
 #from wordpress_xmlrpc.methods.users import GetUserInfo
 #from wordpress_xmlrpc.compat import xmlrpc_client
@@ -210,6 +212,22 @@ class WordPressItem(object):
                 pass
             else:
                 logger.warn('Unhandled tag "%s"', e)
+    
+    def publishItem(self, wp_wrapper):
+        """Publish the WordPress item represented by this instance.
+        Uses specified `wp_wrapper` to interact with a WordPress site.
+        If instance has an ID, will try to update existing item with this ID.
+        Otherwise, will create a new item and update relevant
+        fields (like ID, link) on the instance.
+        
+        @raise RuntimeError: In case referenced WordPress items are missing
+                                required fields (IDs / links or images etc.).
+        @type wp_wrapper: WordPressApiWrapper
+        """
+        if self.id is None:
+            self.publishNew(wp_wrapper)
+        else:
+            self.updateExisting(wp_wrapper)
 
 class WordPressImageAttachment(WordPressItem):
     
@@ -261,13 +279,12 @@ class WordPressImageAttachment(WordPressItem):
         # TODO: handle case of Evernote resource...
 
 class WordPressPost(WordPressItem):
-    _slots = frozenset(('id', 'title', 'slug', 'post_type', 'author',
-                        'post_status', 'content_format', 'content',
-                        'categories', 'tags', 'thumbnail', 'hemingway_grade',
+    _slots = frozenset(('id', 'title', 'slug', 'post_type', 'author', 'tags',
+                        'post_status', 'content', 'categories', 'thumbnail',
                         # Custom fields
                         # TODO: refactor fields handling to be modular and
                         #       extensible, without hardcoded (custom) fields
-                        'project',))
+                        'content_format', 'project', 'hemingway_grade',))
     
     @classmethod
     def isInstance(cls, instance):
@@ -286,12 +303,17 @@ class WordPressPost(WordPressItem):
         self.content = ''
         self.tags = list()
         self.categories = list()
+        self._fully_processed_flag = False
     
     def get_slug(self):
         if self.slug:
             return self.slug
         elif self.title:
             return slugify.slugify(self.title)
+    
+    def isFullyProcessed(self):
+        "True if all links and referenced items are valid"
+        return self._fully_processed_flag
     
     def formatContentLink(self):
         if self.link:
@@ -309,16 +331,30 @@ class WordPressPost(WordPressItem):
                 return link
             else:
                 logger.warn('Could not format content link for "%s"', item)
+                self._fully_processed_flag = False
                 return match_obj.group(0)
+        self._fully_processed_flag = True
         # TODO: refactor fields processing such that the fields themselves
         #       define their processing (instead of hardcoding here)
         # parse thumbnail image link
         if self.thumbnail and self.thumbnail.startswith('evernote:///view/'):
             self.thumbnail = WordPressItem.createFromEvernote(self.thumbnail,
                                                               en_wrapper)
+        if self.thumbnail:
+            if not isinstance(self.thumbnail, WordPressImageAttachment):
+                self._fully_processed_flag = False
+            elif not self.thumbnail.id:
+                self._fully_processed_flag = False
+        
         if self.project and self.project.startswith('evernote:///view/'):
             self.project = WordPressItem.createFromEvernote(self.project,
                                                             en_wrapper)
+        if self.project:
+            if not isinstance(self.project, WordPressPost):
+                self._fully_processed_flag = False
+            elif not self.project.id:
+                self._fully_processed_flag = False
+        
         # replace all <evernote:///...> links within content
         # TODO: maybe match entire Markdown link?
         #  (so I don't override the title if it is specified)
@@ -333,10 +369,87 @@ class WordPressPost(WordPressItem):
         self.post_status = wp_post.post_status
         # TODO: bring categories, tags, author, thumbnail, content
         # TODO: bring hemingway-grade and content format custom fields
+    
+    def asXmlRpcPost(self):
+        """Returns XML RPC WordPressPost item representation of this instance
+        @rtype: wordpress_xmlrpc.WordPressPost
+        """
+        def add_custom_field(post, key, val):
+            if not hasattr(post, 'custom_fields'):
+                post.custom_fields = list()
+            post.custom_fields.append({'key': key, 'value': val})
+        def add_terms(post, tax_name, terms_names):
+            if not hasattr(post, 'terms_names'):
+                post.terms_names = dict()
+            post.terms_names[tax_name] = terms_names
+        post = XmlRpcPost()
+        # TODO: let the fields represent themselves
+        if self.id:
+            post.id = self.id
+        post.title = self.title
+        post.content = self.content
+        post.slug = self.get_slug()
+        post.post_status = self.post_status
+        # TODO: author?
+        if self.thumbnail:
+            post.thumbnail = self.thumbnail.id
+        if self.tags:
+            add_terms(post, 'post_tag', self.tags)
+        if self.categories:
+            add_terms(post, 'category', self.categories)
+        if self.content_format:
+            add_custom_field(post, 'content_format', self.content_format)
+        if self.project:
+            add_custom_field(post, 'project', self.project.id)
+        if self.hemingway_grade:
+            add_custom_field(post, 'hemingwayapp-grade', self.hemingway_grade)
+        return post
+    
+    def publishNew(self, wp_wrapper):
+        """Create new post based on this instance.
+        Uses `wp_wrapper` to publish.
+        
+        @type wp_wrapper: WordPressApiWrapper
+        @requires: Target note has no ID set - it will be populated.
+        @raise RuntimeError: In case referenced WordPress items are missing
+                                required fields (IDs / links or images etc.).
+        """
+        if self.id is not None:
+            raise RuntimeError('Cannot publish new post when ID exists')
+        if not self.isFullyProcessed():
+            raise RuntimeError('Post instance not fully processed')
+        if 'post' == self.post_type:
+            xmlrpc_post = self.asXmlRpcPost()
+        elif 'page' == self.post_type:
+            xmlrpc_post = self.asXmlRpcPage()
+        self.id = wp_wrapper.newPost(xmlrpc_post)
+    
+    def updateExisting(self, wp_wrapper):
+        """Update existing post based on this instance.
+        Uses `wp_wrapper` to publish.
+        
+        @type wp_wrapper: WordPressApiWrapper
+        @requires: Target note has ID set.
+        @raise RuntimeError: In case referenced WordPress items are missing
+                                required fields (IDs / links or images etc.).
+        """
+        if self.id is None:
+            raise RuntimeError('Cannot update post with no ID')
+        if not self.isFullyProcessed():
+            raise RuntimeError('Post instance not fully processed')
+        if 'post' == self.post_type:
+            xmlrpc_post = self.asXmlRpcPost()
+        elif 'page' == self.post_type:
+            xmlrpc_post = self.asXmlRpcPage()
+        if not wp_wrapper.editPost(xmlrpc_post):
+            raise RuntimeError('Failed updating WordPress post')
 
 class WordPressApiWrapper(object):
     
     def __init__(self, xmlrpc_url, username, password):
+        self._init_wp_client(xmlrpc_url, username, password)
+    
+    def _init_wp_client(self, xmlrpc_url, username, password):
         self._wp = Client(xmlrpc_url, username, password)
     
     def mediaItemGenerator(self, parent_id=None):
@@ -351,3 +464,11 @@ class WordPressApiWrapper(object):
         "Generates WordPress post objects"
         for post in self._wp.call(posts.GetPosts()):
             yield post
+    
+    def newPost(self, xmlrpc_post):
+        "Wrapper for invoking the NewPost method"
+        return self._wp.call(posts.NewPost(xmlrpc_post))
+    
+    def editPost(self, xmlrpc_post):
+        "Wrapper for invoking the EditPost method"
+        return self._wp.call(posts.EditPost(xmlrpc_post.id, xmlrpc_post))

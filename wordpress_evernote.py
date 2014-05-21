@@ -40,24 +40,6 @@ def save_wp_image_to_evernote(en_wrapper, notebook_name, wp_image,
         logger.info('Creating new WP Image note "%s"', note_title)
         en_wrapper.saveNoteToNotebook(wp_image_note, notebook_name)
 
-def publish_post_draft_from_evernote(en_wrapper, wp_wrapper, en_note_link):
-    """Create WordPress post from Evernote note, and upload it to a WordPress
-    blog as a draft post.
-    
-    @param `en_wrapper`: Initialized EvernoteApiWrapper object for getting ntoe
-    @param `wp_wrapper`: Initialized WordPressApiWrapper object
-    @param `en_note_link`: Evernote note link string ("evernote://...") for
-                            note with post to publish.
-    
-    @requires: Target note has no ID set - it will be populated.
-    """
-    wp_post = WordPressItem.createFromEvernote(en_note_link, en_wrapper)
-    assert(isinstance(wp_post, WordPressPost))
-    if wp_post.id is not None:
-        logger.error('Got post-note with ID set to %d', wp_post.id)
-        raise RuntimeError()
-    
-
 def main():
     wp_wrapper = WordPressApiWrapper(settings.wpXmlRpcUrl,
                                      settings.wpUsername, settings.wpPassword)

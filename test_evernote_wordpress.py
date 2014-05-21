@@ -2,8 +2,8 @@ import unittest
 from mock import patch
 
 from wordpress import WordPressPost, WordPressImageAttachment, WordPressItem
+from wordpress import WordPressApiWrapper
 from my_evernote import EvernoteApiWrapper
-from wordpress_evernote import publish_post_draft_from_evernote
 
 from collections import namedtuple
 
@@ -119,6 +119,28 @@ title=Project index
 <div>slug=&lt;auto&gt;</div>
 <div>thumbnail=</div>
 <div>link=http://www.ostricher.com/projects/test-project</div>
+<div><br/></div>
+<div>
+<hr/></div>
+<br/>
+<div>Nothing to see here.</div>
+</en-note>"""),
+       EvernoteNote(guid='abcd1234-aaaa-2048-ffff-abcd1234abcd',
+                    title='New project note',
+                    notebookGuid='abcd1234-5678-1928-7890-abcd1234abcd',
+                    content=
+"""<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
+<en-note style="word-wrap: break-word; -webkit-nbsp-mode: space; -webkit-line-break: after-white-space;">
+<div>id=&lt;auto&gt;</div>
+<div>type=post</div>
+<div>content_format=markdown</div>
+title=New project note
+<div>slug=&lt;auto&gt;</div>
+<div>categories=Meta</div>
+<div>tags="Multiword, Tag",test-tag</div>
+<div>project=<a href="evernote:///view/123/s123/abcd1234-aaaa-0000-ffff-abcd1234abcd/abcd1234-aaaa-0000-ffff-abcd1234abcd/" style="color: rgb(105, 170, 53);">Project index</a></div>
+<div>link=&lt;auto&gt;</div>
 <div><br/></div>
 <div>
 <hr/></div>
@@ -246,13 +268,31 @@ class TestEvernoteWordPressParser(unittest.TestCase):
 class TestEvernoteWordPressPublisherr(unittest.TestCase):
     
     @patch('my_evernote.EvernoteApiWrapper._init_en_client')
-    def setUp(self, mock_init_en_client):
+    @patch('wordpress.WordPressApiWrapper._init_wp_client')
+    def setUp(self, mock_init_wp_client, mock_init_en_client):
         self.evernote = EvernoteApiWrapper(token='123')
-        self.wordpress = None
+        self.wordpress = WordPressApiWrapper('xmlrpc.php', 'user', 'password')
     
-    # TODO: patch logger and assert error msg
+    # TODO: better way for multiple patching?
     @patch('my_evernote.EvernoteApiWrapper.getNote',
            new_callable=lambda: mocked_get_note)
-    def test_existing_id_error(self, mock_note_getter):
-        self.assertRaises(RuntimeError,  publish_post_draft_from_evernote,
-                          self.evernote, self.wordpress, test_notes[2].guid)
+    @patch('wordpress.WordPressApiWrapper.editPost',
+           new_callable=lambda: lambda p1, p2: True)
+    def test_update_existing_post(self, mock_edit_post, mock_note_getter):
+        wp_post = WordPressItem.createFromEvernote(test_notes[2].guid,
+                                                   self.evernote)
+        self.assertIsInstance(wp_post, WordPressPost)
+        wp_post.publishItem(self.wordpress)
+    
+    @patch('my_evernote.EvernoteApiWrapper.getNote',
+           new_callable=lambda: mocked_get_note)
+    @patch('wordpress.WordPressApiWrapper.newPost',
+           new_callable=lambda: lambda p1, p2: 660)
+    def test_publish_project_note_existing_project_index(self, mock_newpost,
+                                                         mock_note_getter):
+        wp_post = WordPressItem.createFromEvernote(test_notes[4].guid,
+                                                   self.evernote)
+        self.assertIsInstance(wp_post, WordPressPost)
+        self.assertIsNone(wp_post.id)
+        wp_post.publishItem(self.wordpress)
+        self.assertEqual(660, wp_post.id)
