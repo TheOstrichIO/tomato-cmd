@@ -4,12 +4,17 @@ from mock import patch
 from wordpress import WordPressPost, WordPressImageAttachment, WordPressItem
 from wordpress import WordPressApiWrapper
 from my_evernote import EvernoteApiWrapper
+from wordpress_evernote import EvernoteWordpressAdaptor
 
 from collections import namedtuple
 
 EvernoteNotebook = namedtuple('EvernoteNotebook', ['guid', 'name'])
-EvernoteNote = namedtuple('EvernoteNote', ['guid', 'title',
-                                           'notebookGuid', 'content'])
+
+class EvernoteNote(object):
+    """Dummy Evernote Note class for mocking note object in unit tests."""
+    def __init__(self, **kwargs):
+        for k, v in kwargs.iteritems():
+            setattr(self, k, v)
 
 test_notebooks = [EvernoteNotebook('abcd1234-5678-abef-7890-abcd1234abcd',
                                    'Blog Posts'),
@@ -175,6 +180,26 @@ Finish with one [link with a tag](http://www.ostricher.com/), and [one link with
 """,
 ]
 
+expected_post_publish_note_content = \
+"""<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
+<en-note style="word-wrap: break-word; -webkit-nbsp-mode: space; -webkit-line-break: after-white-space;">
+<div>id=660</div>
+<div>type=post</div>
+<div>content_format=markdown</div>
+title=New project note
+<div>slug=&lt;auto&gt;</div>
+<div>categories=Meta</div>
+<div>tags="Multiword, Tag",test-tag</div>
+<div>project=<a href="evernote:///view/123/s123/abcd1234-aaaa-0000-ffff-abcd1234abcd/abcd1234-aaaa-0000-ffff-abcd1234abcd/" style="color: rgb(105, 170, 53);">Project index</a></div>
+<div>link=http://www.ostricher.com/2014/05/new-project-note</div>
+<div><br/></div>
+<div>
+<hr/></div>
+<br/>
+<div>Nothing to see here.</div>
+</en-note>"""
+
 def mocked_get_note(instance, guid):
     for note in test_notes:
         if note.guid == guid:
@@ -265,13 +290,14 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         self.assertIsInstance(wp_post.project, WordPressPost)
         self.assertEqual(583, wp_post.project.id)
 
-class TestEvernoteWordPressPublisherr(unittest.TestCase):
+class TestEvernoteWordPressPublisher(unittest.TestCase):
     
     @patch('my_evernote.EvernoteApiWrapper._init_en_client')
     @patch('wordpress.WordPressApiWrapper._init_wp_client')
     def setUp(self, mock_init_wp_client, mock_init_en_client):
         self.evernote = EvernoteApiWrapper(token='123')
         self.wordpress = WordPressApiWrapper('xmlrpc.php', 'user', 'password')
+        self.adaptor = EvernoteWordpressAdaptor(self.evernote, self.wordpress)
     
     # TODO: better way for multiple patching?
     @patch('my_evernote.EvernoteApiWrapper.getNote',
@@ -296,3 +322,7 @@ class TestEvernoteWordPressPublisherr(unittest.TestCase):
         self.assertIsNone(wp_post.id)
         wp_post.publishItem(self.wordpress)
         self.assertEqual(660, wp_post.id)
+        self.adaptor.update_note_metadata_from_wordpress_post(
+            test_notes[4], wp_post)
+        self.assertListEqual(expected_post_publish_note_content.split('\n'),
+                             test_notes[4].content.split('\n'))
