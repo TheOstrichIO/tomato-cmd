@@ -1,5 +1,6 @@
-#!/usr/bin/python
+#!/usr/bin/python2
 # -*- coding: utf-8 -*-
+import re
 
 import settings
 import common
@@ -10,11 +11,27 @@ from my_evernote import EvernoteApiWrapper
 logger = common.logger.getChild('wordpress-evernote')
 
 class EvernoteWordpressAdaptor(object):
-    """Evernote-Wordpress Adaptor class.
+    """Evernote-Wordpress Adaptor class."""
     
-    Attributes:
-        @type self.evernote: my_evernote.EvernoteApiWrapper
-    """
+    _attr_pattern = ('(\A|\s*\<\w+\>)\s*(?P<attr>{attr_name}\s*\=\s*'
+                    '(?P<value>[\w\&\;]+))\s*(\Z|\<\/\w+\>\s*)')
+    _attr_matchers_cache = dict()
+    _hr_matcher = re.compile('\<hr\s*\/?\>', re.IGNORECASE)
+    
+    @classmethod
+    def _get_attr_matcher(cls, attr_name):
+        """Return a compiled RegEx matcher for metadata attributes"""
+        if attr_name in cls._attr_matchers_cache:
+            return cls._attr_matchers_cache[attr_name]
+        # RegEx for finding metadata attributes
+        # - <attr-name> in beginning of line or immediately following <..> tag
+        # - "=" after <attr-name>, optionally with whitespaces around it
+        # - <value> after the "=" up to end of line or closing </..> tag,
+        #   where value may contain alphanumeric, "&", or ";".
+        matcher = re.compile(cls._attr_pattern.format(attr_name=attr_name),
+                             re.IGNORECASE)
+        cls._attr_matchers_cache[attr_name] = matcher
+        return matcher
     
     def __init__(self, en_wrapper, wp_wrapper):
         """Initialize Adaptor instance with API wrapper objects.
@@ -45,16 +62,33 @@ class EvernoteWordpressAdaptor(object):
         Exceptions:
           @raise RuntimeError: If ID is set and differs
         """
-        # Find ID and set it if needed
-        import re
-        # RegEx for finding metadata attributes
-        # - <attr-name> in beginning of line or immediately following ">"
-        # - "=" after <attr-name>, optionally with whitespaces around it
-        # - <value> after the "=" up to end of line or "<"
-        re.match('[\A\>](?P<attr_name>\w+\s*\=\s*(?P<value>\w+)[\Z\<]',
-                 note.content, re.IGNORECASE)
-        note.content = ''
-        pass
+        # TODO: get authoritative attributes from WordPress class
+        attrs_to_update = (('id', str(post.id)), ) #('link', post.link),)
+        modified_flag = False
+        content_lines = note.content.split('\n')
+        for linenum, line in enumerate(content_lines):
+            if self._hr_matcher.search(line):
+                # <hr /> tag means end of metadata section
+                break
+            for attr, post_val in attrs_to_update:
+                m = self._get_attr_matcher(attr).match(line)
+                if m:
+                    current_val = m.groupdict()['value']
+                    if post_val == current_val:
+                        logger.debug('No change in attribute "%s"', attr)
+                    else:
+                        logger.debug('Changing note attribute "%s" from "%s" '
+                                     'to "%s"', attr, current_val, post_val)
+                        attr_str = m.groupdict()['attr']
+                        content_lines[linenum] = line.replace(
+                            attr_str, '%s=%s' % (attr, post_val))
+                        modified_flag = True
+        if modified_flag:
+            logger.info('Writing modified content back to note')
+            note.content = '\n'.join(content_lines)
+            self.evernote.updateNote(note)
+        else:
+            logger.info('No changes to note content')
 
 def save_wp_image_to_evernote(en_wrapper, notebook_name, wp_image,
                               force=False):

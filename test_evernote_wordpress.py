@@ -1,6 +1,7 @@
 import unittest
-from mock import patch
+from mock import patch, Mock
 
+import wordpress
 from wordpress import WordPressPost, WordPressImageAttachment, WordPressItem
 from wordpress import WordPressApiWrapper
 from my_evernote import EvernoteApiWrapper
@@ -192,7 +193,7 @@ title=New project note
 <div>categories=Meta</div>
 <div>tags="Multiword, Tag",test-tag</div>
 <div>project=<a href="evernote:///view/123/s123/abcd1234-aaaa-0000-ffff-abcd1234abcd/abcd1234-aaaa-0000-ffff-abcd1234abcd/" style="color: rgb(105, 170, 53);">Project index</a></div>
-<div>link=http://www.ostricher.com/2014/05/new-project-note</div>
+<div>link=&lt;auto&gt;</div>
 <div><br/></div>
 <div>
 <hr/></div>
@@ -209,6 +210,7 @@ class TestEvernoteWordPressParser(unittest.TestCase):
     
     @patch('my_evernote.EvernoteApiWrapper._init_en_client')
     def setUp(self, mock_init_en_client):
+        wordpress.logger = Mock()
         self.evernote = EvernoteApiWrapper(token='123')
     
     @patch('my_evernote.EvernoteApiWrapper.getNote',
@@ -290,11 +292,62 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         self.assertIsInstance(wp_post.project, WordPressPost)
         self.assertEqual(583, wp_post.project.id)
 
+class TestNoteMetadataAttrMatching(unittest.TestCase):
+    
+    def setUp(self):
+        super(TestNoteMetadataAttrMatching, self).setUp()
+        self.id_matcher = EvernoteWordpressAdaptor._get_attr_matcher('id')
+    
+    def test_note_metadata_attr_matching(self):
+        matches = [
+            ('id=123', 'id=123', '123'),
+            ('<div>id=123</div>', 'id=123', '123'),
+            (' id = 123 ', 'id = 123', '123'),
+            (' <div>    id    =    123    </div> ', 'id    =    123', '123'),]
+        for test_string, exp_attr, exp_v in matches:
+            m = self.id_matcher.match(test_string)
+            self.assertIsNotNone(
+                m, 'Did not match anything in "%s"' % test_string)
+            self.assertDictEqual({'attr': exp_attr, 'value': exp_v},
+                                 m.groupdict())
+    
+    def test_note_metadata_attr_non_matching(self):
+        non_matches = [
+            'let me say something about id=13',
+            '<div>id=45 is my friend</div>',
+            'a sentence about <div>id=5</div>']
+        for test_string in non_matches:
+            self.assertIsNone(self.id_matcher.match(test_string))
+    
+    def test_note_metadata_attr_searching(self):
+        attrs_string = """<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
+<div>
+<!-- Items that should match -->
+<div>id=1</div>
+id = 2
+ <div>    id    =    3    </div> 
+<div>id=&lt;auto&gt;</div>
+<!-- Items that should not match -->
+let me say something about id=13',
+<div>id=45 is my friend</div>
+a sentence about <div>id=5</div>
+"""
+        expected_attr_matches = ['1', '2', '3', '&lt;auto&gt;']
+        matches = list()
+        for line in attrs_string.split('\n'):
+            m = self.id_matcher.match(line)
+            if m:
+                matches.append(m.groupdict()['value'])
+        self.assertListEqual(expected_attr_matches, matches)
+
 class TestEvernoteWordPressPublisher(unittest.TestCase):
     
     @patch('my_evernote.EvernoteApiWrapper._init_en_client')
     @patch('wordpress.WordPressApiWrapper._init_wp_client')
-    def setUp(self, mock_init_wp_client, mock_init_en_client):
+    @patch('common.logging')
+    def setUp(self, mock_logging, mock_init_wp_client, mock_init_en_client):
+        super(TestEvernoteWordPressPublisher, self).setUp()
         self.evernote = EvernoteApiWrapper(token='123')
         self.wordpress = WordPressApiWrapper('xmlrpc.php', 'user', 'password')
         self.adaptor = EvernoteWordpressAdaptor(self.evernote, self.wordpress)
@@ -312,10 +365,12 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
     
     @patch('my_evernote.EvernoteApiWrapper.getNote',
            new_callable=lambda: mocked_get_note)
+    @patch('my_evernote.EvernoteApiWrapper.updateNote')
     @patch('wordpress.WordPressApiWrapper.newPost',
            new_callable=lambda: lambda p1, p2: 660)
-    def test_publish_project_note_existing_project_index(self, mock_newpost,
-                                                         mock_note_getter):
+    @patch('wordpress_evernote.logger')
+    def test_publish_project_note_existing_project_index(
+          self, mock_logger, mock_newpost, mock_note_update, mock_note_getter):
         wp_post = WordPressItem.createFromEvernote(test_notes[4].guid,
                                                    self.evernote)
         self.assertIsInstance(wp_post, WordPressPost)
@@ -326,3 +381,4 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
             test_notes[4], wp_post)
         self.assertListEqual(expected_post_publish_note_content.split('\n'),
                              test_notes[4].content.split('\n'))
+        mock_note_update.assert_called_once_with(test_notes[4])
