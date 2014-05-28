@@ -202,15 +202,20 @@ class EvernoteApiWrapper():
     
     @ratelimit_wait_and_retry
     def updateNote(self, note):
+        """Update a note in the Evernote note store.
+        
+        :param note: The note to update.
+        :type note: Types.Note
+        """
         self._note_store.updateNote(self._client.token, note)
     
-    """Get Evernote Note object by GUID
-    
-    @param `note_guid`: The requested note GUID
-    @param `with_content_flag`: If `True`, includes note content in response
-    """
     @ratelimit_wait_and_retry
     def getNote(self, note_guid, with_content_flag=True):
+        """Get Evernote Note object by GUID.
+        
+        :param note_guid: The requested note GUID
+        :param with_content_flag: If `True`, includes note content in response
+        """
         return self._note_store.getNote(self._client.token,
                                         note_guid, with_content_flag,
                                         False, False, False)
