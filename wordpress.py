@@ -49,7 +49,7 @@ class WordPressItem(object):
     @classmethod
     def _get_note_from_guid_or_enlink(cls, guid_or_enlink, en_wrapper=None):
         guid = guid_or_enlink
-        if guid.startswith('evernote:///view/'):
+        if EvernoteApiWrapper.is_evernote_url(guid):
             guid = EvernoteApiWrapper.parseNoteLinkUrl(guid_or_enlink).guid
         if guid in cls._cache:
             return cls._cache[guid]
@@ -63,7 +63,7 @@ class WordPressItem(object):
         note = note_or_guid_or_enlink
         if isinstance(note, str):
             guid = note_or_guid_or_enlink
-            if guid.startswith('evernote:///view/'):
+            if EvernoteApiWrapper.is_evernote_url(guid):
                 guid = EvernoteApiWrapper.parseNoteLinkUrl(guid).noteGuid
         else:
             guid = note.guid
@@ -111,7 +111,7 @@ class WordPressItem(object):
             #  and Evernote links should load the related WpImage
             # luckily - I don't want to support other formats...
             url = atag.attrib.get('href', '')
-            if url.startswith('evernote:///view/'):
+            if EvernoteApiWrapper.is_evernote_url(url):
                 # surround in <> to allow secondary parsing
                 return '<%s>' % (url)
             else:
@@ -147,6 +147,9 @@ class WordPressItem(object):
                           list(csv.reader([value], skipinitialspace=True)))
         def parse_line(line, in_meta):
             if in_meta:
+                if line.startswith('#'):
+                    # skipping commented lines in meta section
+                    return
                 match = re.match('(?P<key>[\w\-]+)\=(?P<value>.*)', line)
                 if match:
                     k, v = match.groupdict()['key'], match.groupdict()['value']
@@ -176,13 +179,13 @@ class WordPressItem(object):
                         self.link = v <> '<auto>' and v or None
                     elif 'parent' == k:
                         v = v.strip('<>')
-                        assert(v.startswith('evernote:///view/'))
+                        assert(EvernoteApiWrapper.is_evernote_url(v))
                         self.parent = v
                     elif 'project' == k:
                         # TODO: refactor field processing to something modular
                         # e.g., don't hardcode custom fields here...
                         v = v.strip('<>')
-                        assert(v.startswith('evernote:///view/'))
+                        assert(EvernoteApiWrapper.is_evernote_url(v))
                         self.project = v
                     elif 'caption' == k:
                         self.caption = v
@@ -265,7 +268,7 @@ class WordPressImageAttachment(WordPressItem):
             return imtag
     
     def processLinks(self, en_wrapper=None):
-        if self.parent.startswith('evernote:///view/'):
+        if EvernoteApiWrapper.is_evernote_url(self.parent):
             parent_item = WordPressItem.createFromEvernote(self.parent,
                                                            en_wrapper)
             if parent_item.id:
@@ -337,7 +340,8 @@ class WordPressPost(WordPressItem):
         # TODO: refactor fields processing such that the fields themselves
         #       define their processing (instead of hardcoding here)
         # parse thumbnail image link
-        if self.thumbnail and self.thumbnail.startswith('evernote:///view/'):
+        if (self.thumbnail and
+                EvernoteApiWrapper.is_evernote_url(self.thumbnail)):
             self.thumbnail = WordPressItem.createFromEvernote(self.thumbnail,
                                                               en_wrapper)
         if self.thumbnail:
@@ -346,7 +350,7 @@ class WordPressPost(WordPressItem):
             elif not self.thumbnail.id:
                 self._fully_processed_flag = False
         
-        if self.project and self.project.startswith('evernote:///view/'):
+        if self.project and EvernoteApiWrapper.is_evernote_url(self.project):
             self.project = WordPressItem.createFromEvernote(self.project,
                                                             en_wrapper)
         if self.project:

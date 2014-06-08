@@ -98,6 +98,11 @@ class EvernoteApiWrapper():
         return resource, resource_tag.encode('utf-8')
     
     @staticmethod
+    def is_evernote_url(url):
+        return (url.startswith('evernote:///view/') or
+                url.startswith('https://www.evernote.com/'))
+    
+    @staticmethod
     def parseNoteLinkUrl(url):
         """Returns parsed link object.
         Ref: http://dev.evernote.com/doc/articles/note_links.php
