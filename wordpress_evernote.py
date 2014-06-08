@@ -1,6 +1,7 @@
-#!/usr/bin/python2
+#!/usr/bin/python2.7
 # -*- coding: utf-8 -*-
 import re
+import argparse
 
 import settings
 import common
@@ -8,7 +9,16 @@ from wordpress import WordPressApiWrapper, WordPressPost
 from wordpress import WordPressItem, WordPressImageAttachment
 from my_evernote import EvernoteApiWrapper
 
+wp_en_parser = argparse.ArgumentParser(
+    description='WordPress <--> Evernote utilities')
+wp_en_parser.add_argument('--wordpress',
+                          default='default',
+                          help='WordPress account name to use from settings.')
+subparsers = wp_en_parser.add_subparsers()
+
 logger = common.logger.getChild('wordpress-evernote')
+
+###############################################################################
 
 class EvernoteWordpressAdaptor(object):
     """Evernote-Wordpress Adaptor class."""
@@ -137,14 +147,53 @@ def publish_post_draft_from_evernote(en_wrapper, wp_wrapper, en_note_link):
     assert(isinstance(wp_post, WordPressPost))
     wp_post.publishItem(wp_wrapper)
 
-def main():
+def _get_wrappers(args):
+    wp_account = settings.WORDPRESS[args.wordpress]
+    # Each entry can be either a WordPressCredentials object,
+    # or a name of another entry.
+    while not isinstance(wp_account, settings.WordPressCredentials):
+        wp_account = settings.WORDPRESS[wp_account]
+    logger.debug('Working with WordPress at URL "%s"', wp_account.xmlrpc_url)
+    wp_wrapper = WordPressApiWrapper(wp_account.xmlrpc_url,
+                                     wp_account.username, wp_account.password)
+    en_wrapper = EvernoteApiWrapper(settings.enDevToken_PRODUCTION)
+    return (wp_wrapper, en_wrapper)
+
+###############################################################################
+
+def post_note(args):
+    """ArgParse handler for post-note command."""
+    wp_wrapper, en_wrapper = _get_wrappers(args)
+    publish_post_draft_from_evernote(en_wrapper, wp_wrapper, args.en_link)
+    # TODO: update note with ID and stuff
+
+post_parser = subparsers.add_parser('post-note',
+                                    help='Create a WordPress post from '
+                                         'Evernote note')
+post_parser.add_argument('en_link',
+                         help='Evernote note to post '
+                              '(full link, or just GUID)')
+post_parser.set_defaults(func=post_note)
+
+###############################################################################
+
+def _images_to_evernote():
     wp_wrapper = WordPressApiWrapper(settings.wpXmlRpcUrl,
                                      settings.wpUsername, settings.wpPassword)
     en_wrapper = EvernoteApiWrapper(settings.enDevToken_PRODUCTION)
-    #for wp_image in wp_wrapper.mediaItemGenerator():
-    #    save_wp_image_to_evernote(en_wrapper, '.zImages', wp_image)
+    for wp_image in wp_wrapper.mediaItemGenerator():
+        save_wp_image_to_evernote(en_wrapper, '.zImages', wp_image)
+
+def _custom_fields():
+    wp_wrapper = WordPressApiWrapper(settings.wpXmlRpcUrl,
+                                     settings.wpUsername, settings.wpPassword)
     for wp_post in wp_wrapper.postGenerator():
         print wp_post, wp_post.custom_fields
+
+def main():
+    # _custom_fields()
+    args = wp_en_parser.parse_args()
+    args.func(args)
 
 if '__main__' == __name__:
     main()
