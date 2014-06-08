@@ -23,6 +23,12 @@ note_link_re = re.compile('evernote\:\/\/\/view\/(?P<uid>\d+)/(?P<sid>s\d+)\/'
                           '(?P<note_id>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-'
                           '[0-9a-f]{4}-[0-9a-f]{12})\/(?P=note_id)\/')
 
+# https://www.evernote.com/shard/s123/nl/112233/abcd1234-1234-abcd-1234-abcd1234abcd
+note_url_re = re.compile('https\:\/\/www\.evernote\.com\/shard\/'
+                          '(?P<sid>s\d+)\/nl\/(?P<uid>\d+)\/'
+                          '(?P<note_id>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-'
+                          '[0-9a-f]{4}-[0-9a-f]{12})\/?')
+
 def ratelimit_wait_and_retry(func):
     def runner(*args, **kwargs):
         while True:
@@ -91,25 +97,29 @@ class EvernoteApiWrapper():
                        (mime, binascii.hexlify(data.bodyHash))
         return resource, resource_tag.encode('utf-8')
     
-    @classmethod
-    def parseNoteLinkUrl(cls, url):
+    @staticmethod
+    def parseNoteLinkUrl(url):
         """Returns parsed link object.
         Ref: http://dev.evernote.com/doc/articles/note_links.php
         Currently supporting only notes in synced notebooks, and not linked.
         (e.g. no `client specific id` and `linked notebook guid`)
         """
         link = namedtuple('EvernoteLink', ['user_id', 'shard_id', 'noteGuid',])
-        note_link_match = note_link_re.match(url)
-        if note_link_match:
-            d = note_link_match.groupdict()
+        def match_to_link(m):
+            d = m.groupdict()
             link.user_id = d['uid']
             link.shard_id = d['sid']
             link.noteGuid = d['note_id']
             return link
-        else:
-            logger.error('Failed parsing Evernote note link %s', url)
-            raise RuntimeError()
-        
+        note_link_match = note_link_re.match(url)
+        if note_link_match:
+            return match_to_link(note_link_match)
+        note_url_match = note_url_re.match(url)
+        if note_url_match:
+            return match_to_link(note_url_match)
+        logger.error('Failed parsing Evernote note link %s', url)
+        raise RuntimeError()
+    
     def __init__(self, token, sandbox=False):
         self.cached_notebook = None
         self._init_en_client(token, sandbox)
