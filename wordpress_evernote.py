@@ -177,16 +177,13 @@ post_parser.set_defaults(func=post_note)
 
 ###############################################################################
 
-def _images_to_evernote():
-    wp_wrapper = WordPressApiWrapper(settings.wpXmlRpcUrl,
-                                     settings.wpUsername, settings.wpPassword)
-    en_wrapper = EvernoteApiWrapper(settings.enDevToken_PRODUCTION)
+def _images_to_evernote(args):
+    wp_wrapper, en_wrapper = _get_wrappers(args)
     for wp_image in wp_wrapper.mediaItemGenerator():
         save_wp_image_to_evernote(en_wrapper, '.zImages', wp_image)
 
-def _custom_fields():
-    wp_wrapper = WordPressApiWrapper(settings.wpXmlRpcUrl,
-                                     settings.wpUsername, settings.wpPassword)
+def _custom_fields(args):
+    wp_wrapper, _ = _get_wrappers(args)
     for wp_post in wp_wrapper.postGenerator():
         print wp_post, wp_post.custom_fields
 
