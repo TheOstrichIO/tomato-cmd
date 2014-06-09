@@ -47,18 +47,6 @@ class WordPressItem(object):
         cls._all_slots.update(subclass._slots)
     
     @classmethod
-    def _get_note_from_guid_or_enlink(cls, guid_or_enlink, en_wrapper=None):
-        guid = guid_or_enlink
-        if EvernoteApiWrapper.is_evernote_url(guid):
-            guid = EvernoteApiWrapper.parseNoteLinkUrl(guid_or_enlink).guid
-        if guid in cls._cache:
-            return cls._cache[guid]
-        assert(en_wrapper)
-        note = en_wrapper.getNote(guid)
-        cls._cache[guid] = note
-        return note
-    
-    @classmethod
     def createFromEvernote(cls, note_or_guid_or_enlink, en_wrapper=None):
         note = note_or_guid_or_enlink
         if isinstance(note, basestring):
