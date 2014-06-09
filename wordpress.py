@@ -66,7 +66,6 @@ class WordPressItem(object):
         else:
             guid = note.guid
         # return parsed note from cache, if cached
-        # TODO: move caching to EvernoteApiWrapper
         if guid in cls._cache:
             return cls._cache[guid]
         # not cached - parse and cache result

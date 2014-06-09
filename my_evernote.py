@@ -47,6 +47,8 @@ def ratelimit_wait_and_retry(func):
 
 class EvernoteApiWrapper():
     
+    _cache = dict()
+    
     @classmethod
     def noteTemplate(cls):
         return Template('\r\n'.join([
@@ -246,7 +248,10 @@ class EvernoteApiWrapper():
         :param with_content_flag: If `True`, includes note content in response
         """
         note_guid = self.get_note_guid(note_genlink)
-        # TODO: move note caching here
-        return self._note_store.getNote(self._client.token,
+        if note_guid in self._cache:
+            return self._cache[note_guid]
+        note = self._note_store.getNote(self._client.token,
                                         note_guid, with_content_flag,
                                         False, False, False)
+        self._cache[note_guid] = note
+        return note
