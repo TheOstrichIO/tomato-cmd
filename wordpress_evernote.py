@@ -55,6 +55,32 @@ class EvernoteWordpressAdaptor(object):
         self.evernote = en_wrapper
         self.wordpress = wp_wrapper
     
+    def post_to_wordpress_from_note(self, note_link):
+        """Create WordPress post from Evernote note,
+        and publish it to a WordPress blog.
+        
+        A note with ID not set will be posted as a new post, and the assigned
+         post ID will be updated in the Evernote note.
+        A note with ID set will result an update of the existing post.
+        
+        @warning: Avoid posting the same note to different WordPress accounts,
+                  as the IDs might be inconsistent!
+        
+        Args:
+            @param `note_link`: Evernote note link string for
+                                note with post to publish.
+        """
+        # Get note from Evernote
+        en_note = self.evernote.getNote(note_link)
+        # Create a WordPress post from note
+        #: :type wp_post: WordPressPost
+        wp_post = WordPressItem.createFromEvernote(en_note, self.wordpress)
+        assert(isinstance(wp_post, WordPressPost))
+        # Post the post (...)
+        wp_post.publishItem(self.wordpress)
+        # Update note metadata from published post (e.g. ID for new post)
+        self.update_note_metadata_from_wordpress_post(en_note, wp_post)
+    
     def update_note_metadata_from_wordpress_post(self, note, post):
         """Updates an Evernote post note metadata based on Wordpress post item.
         
@@ -131,23 +157,9 @@ def save_wp_image_to_evernote(en_wrapper, notebook_name, wp_image,
         logger.info('Creating new WP Image note "%s"', note_title)
         en_wrapper.saveNoteToNotebook(wp_image_note, notebook_name)
 
-def publish_post_draft_from_evernote(en_wrapper, wp_wrapper, en_note_link):
-    """Create WordPress post from Evernote note,
-    and publish it to a WordPress blog.
-    
-    @param `en_wrapper`: Initialized EvernoteApiWrapper object for getting note
-    @type en_wrapper: EvernoteApiWrapper
-    @param `wp_wrapper`: Initialized WordPressApiWrapper object
-    @type wp_wrapper: WordPressApiWrapper
-    @param `en_note_link`: Evernote note link string ("evernote://...") for
-                            note with post to publish.
-    """
-    #: :type wp_post: WordPressPost
-    wp_post = WordPressItem.createFromEvernote(en_note_link, en_wrapper)
-    assert(isinstance(wp_post, WordPressPost))
-    wp_post.publishItem(wp_wrapper)
+###############################################################################
 
-def _get_wrappers(args):
+def _get_adaptor(args):
     wp_account = settings.WORDPRESS[args.wordpress]
     # Each entry can be either a WordPressCredentials object,
     # or a name of another entry.
@@ -157,26 +169,11 @@ def _get_wrappers(args):
     wp_wrapper = WordPressApiWrapper(wp_account.xmlrpc_url,
                                      wp_account.username, wp_account.password)
     en_wrapper = EvernoteApiWrapper(settings.enDevToken_PRODUCTION)
-    return (wp_wrapper, en_wrapper)
+    return EvernoteWordpressAdaptor(en_wrapper, wp_wrapper)
 
-###############################################################################
-
-def post_note(args):
+def post_note(adaptor, args):
     """ArgParse handler for post-note command."""
-    #: :type wp_wrapper: WordPressApiWrapper
-    #: :type en_wrapper: EvernoteApiWrapper
-    wp_wrapper, en_wrapper = _get_wrappers(args)
-    adaptor = EvernoteWordpressAdaptor(en_wrapper, wp_wrapper)
-    # Get note from Evernote
-    en_note = en_wrapper.getNote(args.en_link)
-    # Create a WordPress post from note
-    #: :type wp_post: WordPressPost
-    wp_post = WordPressItem.createFromEvernote(en_note, en_wrapper)
-    assert(isinstance(wp_post, WordPressPost))
-    # Post the post (...)
-    wp_post.publishItem(wp_wrapper)
-    # Update note metadata from published post (e.g. ID for new post)
-    adaptor.update_note_metadata_from_wordpress_post(en_note, wp_post)
+    adaptor.post_to_wordpress_from_note(args.en_link)
 
 post_parser = subparsers.add_parser('post-note',
                                     help='Create a WordPress post from '
@@ -188,20 +185,19 @@ post_parser.set_defaults(func=post_note)
 
 ###############################################################################
 
-def _images_to_evernote(args):
-    wp_wrapper, en_wrapper = _get_wrappers(args)
-    for wp_image in wp_wrapper.mediaItemGenerator():
-        save_wp_image_to_evernote(en_wrapper, '.zImages', wp_image)
+def _images_to_evernote(adaptor, unused_args):
+    for wp_image in adaptor.wordpress.mediaItemGenerator():
+        save_wp_image_to_evernote(adaptor.evernote, '.zImages', wp_image)
 
-def _custom_fields(args):
-    wp_wrapper, _ = _get_wrappers(args)
-    for wp_post in wp_wrapper.postGenerator():
+def _custom_fields(adaptor, unused_args):
+    for wp_post in adaptor.wordpress.postGenerator():
         print wp_post, wp_post.custom_fields
 
 def main():
     # _custom_fields()
     args = wp_en_parser.parse_args()
-    args.func(args)
+    adaptor = _get_adaptor(args)
+    args.func(adaptor, args)
 
 if '__main__' == __name__:
     main()
