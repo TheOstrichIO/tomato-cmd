@@ -163,9 +163,20 @@ def _get_wrappers(args):
 
 def post_note(args):
     """ArgParse handler for post-note command."""
+    #: :type wp_wrapper: WordPressApiWrapper
+    #: :type en_wrapper: EvernoteApiWrapper
     wp_wrapper, en_wrapper = _get_wrappers(args)
-    publish_post_draft_from_evernote(en_wrapper, wp_wrapper, args.en_link)
-    # TODO: update note with ID and stuff
+    adaptor = EvernoteWordpressAdaptor(en_wrapper, wp_wrapper)
+    # Get note from Evernote
+    en_note = en_wrapper.getNote(args.en_link)
+    # Create a WordPress post from note
+    #: :type wp_post: WordPressPost
+    wp_post = WordPressItem.createFromEvernote(en_note, en_wrapper)
+    assert(isinstance(wp_post, WordPressPost))
+    # Post the post (...)
+    wp_post.publishItem(wp_wrapper)
+    # Update note metadata from published post (e.g. ID for new post)
+    adaptor.update_note_metadata_from_wordpress_post(en_note, wp_post)
 
 post_parser = subparsers.add_parser('post-note',
                                     help='Create a WordPress post from '
