@@ -125,6 +125,20 @@ class EvernoteApiWrapper():
         logger.error('Failed parsing Evernote note link %s', url)
         raise RuntimeError()
     
+    @classmethod
+    def get_note_guid(cls, en_link_or_url_or_guid):
+        """Return an Evernote note GUID from link string.
+        
+        The link can be of several forms:
+        - Just a GUID (that's trivial).
+        - Evernote link of the form evernote:///view/...
+        - Evernote URL of the form https://www.evernote.com/...
+        """
+        guid = en_link_or_url_or_guid
+        if cls.is_evernote_url(guid):
+            guid = cls.parseNoteLinkUrl(guid).noteGuid
+        return guid
+    
     def __init__(self, token, sandbox=False):
         self.cached_notebook = None
         self._init_en_client(token, sandbox)
@@ -225,12 +239,14 @@ class EvernoteApiWrapper():
         self._note_store.updateNote(self._client.token, note)
     
     @ratelimit_wait_and_retry
-    def getNote(self, note_guid, with_content_flag=True):
+    def getNote(self, note_genlink, with_content_flag=True):
         """Get Evernote Note object by GUID.
         
-        :param note_guid: The requested note GUID
+        :param note_genlink: The requested note generalized link
         :param with_content_flag: If `True`, includes note content in response
         """
+        note_guid = self.get_note_guid(note_genlink)
+        # TODO: move note caching here
         return self._note_store.getNote(self._client.token,
                                         note_guid, with_content_flag,
                                         False, False, False)

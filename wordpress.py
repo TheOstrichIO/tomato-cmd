@@ -61,13 +61,12 @@ class WordPressItem(object):
     @classmethod
     def createFromEvernote(cls, note_or_guid_or_enlink, en_wrapper=None):
         note = note_or_guid_or_enlink
-        if isinstance(note, str):
-            guid = note_or_guid_or_enlink
-            if EvernoteApiWrapper.is_evernote_url(guid):
-                guid = EvernoteApiWrapper.parseNoteLinkUrl(guid).noteGuid
+        if isinstance(note, basestring):
+            guid = EvernoteApiWrapper.get_note_guid(note_or_guid_or_enlink)
         else:
             guid = note.guid
         # return parsed note from cache, if cached
+        # TODO: move caching to EvernoteApiWrapper
         if guid in cls._cache:
             return cls._cache[guid]
         # not cached - parse and cache result
