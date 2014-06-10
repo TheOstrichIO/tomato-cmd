@@ -227,7 +227,9 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         self.assertIsNone(wp_image.date_created)
         self.assertEqual('Description of test image',
                          wp_image.description)
-        self.assertEqual(544, wp_image.parent)
+        self.assertIsInstance(wp_image.parent, WordPressPost)
+        self.assertEqual(544, wp_image.parent.id)
+        self.assertSetEqual(set((wp_image.parent,)), wp_image._ref_wp_items)
     
     @patch('my_evernote.EvernoteApiWrapper.getNote',
            new_callable=lambda: mocked_get_note)
@@ -251,6 +253,10 @@ class TestEvernoteWordPressParser(unittest.TestCase):
                          wp_post.thumbnail.link)
         self.assertListEqual(expected_content[0].split('\n'),
                              wp_post.content.split('\n'))
+        self.assertSetEqual(
+            set([wp_post.thumbnail, WordPressItem._cache['abcd1234-5678-0000-7'
+                                                         '890-abcd1234abcd']]),
+            wp_post._ref_wp_items)
     
     @patch('my_evernote.EvernoteApiWrapper.getNote',
            new_callable=lambda: mocked_get_note)
@@ -270,6 +276,7 @@ class TestEvernoteWordPressParser(unittest.TestCase):
                          wp_post.get_slug())
         self.assertEqual('', wp_post.thumbnail)
         self.assertEqual("Nothing to see here.\n", wp_post.content)
+        self.assertSetEqual(set(), wp_post._ref_wp_items)
     
     @patch('my_evernote.EvernoteApiWrapper.getNote',
            new_callable=lambda: mocked_get_note)
@@ -291,6 +298,7 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         self.assertEqual("Nothing to see here.\n", wp_post.content)
         self.assertIsInstance(wp_post.project, WordPressPost)
         self.assertEqual(583, wp_post.project.id)
+        self.assertSetEqual(set((wp_post.project,)), wp_post._ref_wp_items)
 
 class TestNoteMetadataAttrMatching(unittest.TestCase):
     

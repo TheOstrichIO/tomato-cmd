@@ -87,6 +87,9 @@ class WordPressItem(object):
         self.content = ''
         self.tags = list()
         self.categories = list()
+        # A set of WordPress items that the current item refers to
+        #  (e.g. uses as images or links to other posts or pages)
+        self._ref_wp_items = set()
     
     def initFromEvernote(self, note):
         def fix_text(text):
@@ -255,12 +258,9 @@ class WordPressImageAttachment(WordPressItem):
     
     def processLinks(self, en_wrapper=None):
         if EvernoteApiWrapper.is_evernote_url(self.parent):
-            parent_item = WordPressItem.createFromEvernote(self.parent,
+            self.parent = WordPressItem.createFromEvernote(self.parent,
                                                            en_wrapper)
-            if parent_item.id:
-                self.parent = parent_item.id
-            else:
-                logger.warn('Parent item "%s" has no ID', parent_item)
+            self._ref_wp_items.add(self.parent)
     
     def image(self):
         "Returns a file-like object for reading image data."
@@ -315,6 +315,7 @@ class WordPressPost(WordPressItem):
         def parse_content_link(match_obj):
             enlink = match_obj.group(1)
             item = WordPressItem.createFromEvernote(enlink, en_wrapper)
+            self._ref_wp_items.add(item)
             link = item.formatContentLink()
             if link:
                 return link
@@ -335,6 +336,10 @@ class WordPressPost(WordPressItem):
                 self._fully_processed_flag = False
             elif not self.thumbnail.id:
                 self._fully_processed_flag = False
+            if isinstance(self.thumbnail, WordPressImageAttachment):
+                self._ref_wp_items.add(self.thumbnail)
+            else:
+                logger.warning('Thumbnail is not a WordPress image item')
         
         if self.project and EvernoteApiWrapper.is_evernote_url(self.project):
             self.project = WordPressItem.createFromEvernote(self.project,
@@ -344,6 +349,10 @@ class WordPressPost(WordPressItem):
                 self._fully_processed_flag = False
             elif not self.project.id:
                 self._fully_processed_flag = False
+            if isinstance(self.project, WordPressPost):
+                self._ref_wp_items.add(self.project)
+            else:
+                logger.warning('Project is not a WordPress post item')
         
         # replace all <evernote:///...> links within content
         # TODO: maybe match entire Markdown link?
