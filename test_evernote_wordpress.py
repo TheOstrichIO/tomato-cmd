@@ -66,32 +66,6 @@ test_notes = {
         content='project-note-2.xml'),
     }
 
-expected_content = [
-"""First line of content.
-
-Some content between br-divs, before closing of div that started before meta
-
-A markdown list with no line breaks between items:
-
-1. List item.
-2. List item and "&" HTML escaping test.
-3. List item that continues on
-   following line with indentation.
-
-First line after markdown list, followed by line that contains only a "comment"
-
-<!--more-->
-
-Line with image tag pointing to image-note as Evernote linked note: [caption id="attachment_277" align="alignnone"]<a href="http://www.ostricher.com/images/test.png"><img src="http://www.ostricher.com/images/test.png" class="wp-image-277" alt="Description of test image" /></a> Image caption[/caption]
-
-Line with Evernote TODO checkbox followed by some text (&#x2751;do this better). Parser should warn.
-
-And here's a [link to an existing post](http://www.ostricher.com/2014/04/another-test-note "Another test note")!
-
-Finish with one [link with a tag](http://www.ostricher.com/), and [one link with no a tag but with title](http://www.ostricher.com/ "Ostricher.com site"), followed by some text.
-""",
-]
-
 expected_post_publish_note_content = \
 """<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
@@ -159,7 +133,9 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         self.assertIsInstance(wp_post.thumbnail, WordPressImageAttachment)
         self.assertEqual('http://www.ostricher.com/images/test.png',
                          wp_post.thumbnail.link)
-        self.assertListEqual(expected_content[0].split('\n'),
+        with open('test-data/post-content/post-note-1.md', 'r') as content_f:
+            expected_content = content_f.read()
+        self.assertListEqual(expected_content.split('\n'),
                              wp_post.content.split('\n'))
         # The thumbnail image is **also** expected in _ref_wp_items because
         #  it is also used as an image in the post content.
