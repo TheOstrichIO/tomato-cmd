@@ -2,6 +2,7 @@ import unittest
 from mock import patch, Mock, MagicMock
 
 import wordpress
+import wordpress_evernote
 from wordpress import WordPressPost, WordPressImageAttachment, WordPressItem
 from wordpress import WordPressApiWrapper
 from my_evernote import EvernoteApiWrapper
@@ -351,25 +352,23 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
     @patch('common.logging')
     def setUp(self, mock_logging, mock_init_wp_client, mock_init_en_client):
         super(TestEvernoteWordPressPublisher, self).setUp()
+        wordpress_evernote.logger = MagicMock()
         self.evernote = EvernoteApiWrapper(token='123')
         self.evernote.getNote = MagicMock(side_effect=mocked_get_note)
         self.wordpress = WordPressApiWrapper('xmlrpc.php', 'user', 'password')
         self.adaptor = EvernoteWordpressAdaptor(self.evernote, self.wordpress)
     
-    @patch('wordpress.WordPressApiWrapper.editPost',
-           new_callable=lambda: lambda p1, p2: True)
-    def test_update_existing_post(self, mock_edit_post):
+    def test_update_existing_post(self):
+        self.wordpress.editPost = MagicMock(return_value=True)
         wp_post = WordPressItem.createFromEvernote(test_notes[2].guid,
                                                    self.evernote)
         self.assertIsInstance(wp_post, WordPressPost)
         wp_post.publishItem(self.wordpress)
+        self.assertTrue(self.wordpress.editPost.called)
     
-    @patch('my_evernote.EvernoteApiWrapper.updateNote')
-    @patch('wordpress.WordPressApiWrapper.newPost',
-           new_callable=lambda: lambda p1, p2: 660)
-    @patch('wordpress_evernote.logger')
-    def test_publish_project_note_existing_project_index(
-          self, mock_logger, mock_newpost, mock_note_update):
+    def test_publish_project_note_existing_project_index(self):
+        self.evernote.updateNote = MagicMock()
+        self.wordpress.newPost = MagicMock(return_value=660)
         wp_post = WordPressItem.createFromEvernote(test_notes[4].guid,
                                                    self.evernote)
         self.assertIsInstance(wp_post, WordPressPost)
@@ -380,4 +379,4 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
             test_notes[4], wp_post)
         self.assertListEqual(expected_post_publish_note_content.split('\n'),
                              test_notes[4].content.split('\n'))
-        mock_note_update.assert_called_once_with(test_notes[4])
+        self.evernote.updateNote.assert_called_once_with(test_notes[4])
