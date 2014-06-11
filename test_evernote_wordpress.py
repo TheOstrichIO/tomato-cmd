@@ -1,5 +1,5 @@
 import unittest
-from mock import patch, Mock
+from mock import patch, Mock, MagicMock
 
 import wordpress
 from wordpress import WordPressPost, WordPressImageAttachment, WordPressItem
@@ -201,7 +201,7 @@ title=New project note
 <div>Nothing to see here.</div>
 </en-note>"""
 
-def mocked_get_note(instance, guid):
+def mocked_get_note(guid):
     for note in test_notes:
         if note.guid == guid:
             return note
@@ -212,10 +212,9 @@ class TestEvernoteWordPressParser(unittest.TestCase):
     def setUp(self, mock_init_en_client):
         wordpress.logger = Mock()
         self.evernote = EvernoteApiWrapper(token='123')
+        self.evernote.getNote = MagicMock(side_effect=mocked_get_note)
     
-    @patch('my_evernote.EvernoteApiWrapper.getNote',
-           new_callable=lambda: mocked_get_note)
-    def test_evernote_image_parser(self, mock_note_getter):
+    def test_evernote_image_parser(self):
         wp_image = WordPressItem.createFromEvernote(test_notes[1].guid,
                                                     self.evernote)
         self.assertIsInstance(wp_image, WordPressImageAttachment)
@@ -229,11 +228,9 @@ class TestEvernoteWordPressParser(unittest.TestCase):
                          wp_image.description)
         self.assertIsInstance(wp_image.parent, WordPressPost)
         self.assertEqual(544, wp_image.parent.id)
-        self.assertSetEqual(set((wp_image.parent,)), wp_image._ref_wp_items)
+        self.assertSetEqual(set(), wp_image._ref_wp_items)
     
-    @patch('my_evernote.EvernoteApiWrapper.getNote',
-           new_callable=lambda: mocked_get_note)
-    def test_evernote_post_parser(self, mock_note_getter):
+    def test_evernote_post_parser(self):
         wp_post = WordPressItem.createFromEvernote(test_notes[0].guid,
                                                    self.evernote)
         self.assertIsInstance(wp_post, WordPressPost)
@@ -253,14 +250,14 @@ class TestEvernoteWordPressParser(unittest.TestCase):
                          wp_post.thumbnail.link)
         self.assertListEqual(expected_content[0].split('\n'),
                              wp_post.content.split('\n'))
+        # The thumbnail image is **also** expected in _ref_wp_items because
+        #  it is also used as an image in the post content.
         self.assertSetEqual(
-            set([wp_post.thumbnail, WordPressItem._cache['abcd1234-5678-0000-7'
-                                                         '890-abcd1234abcd']]),
-            wp_post._ref_wp_items)
+          set([WordPressItem._cache['abcd1234-1234-abcd-1234-abcd1234abcd'],
+               WordPressItem._cache['abcd1234-5678-0000-7890-abcd1234abcd']]),
+          wp_post._ref_wp_items)
     
-    @patch('my_evernote.EvernoteApiWrapper.getNote',
-           new_callable=lambda: mocked_get_note)
-    def test_evernote_page_parser(self, mock_note_getter):
+    def test_evernote_page_parser(self):
         wp_post = WordPressItem.createFromEvernote(test_notes[3].guid,
                                                    self.evernote)
         self.assertIsInstance(wp_post, WordPressPost)
@@ -278,9 +275,7 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         self.assertEqual("Nothing to see here.\n", wp_post.content)
         self.assertSetEqual(set(), wp_post._ref_wp_items)
     
-    @patch('my_evernote.EvernoteApiWrapper.getNote',
-           new_callable=lambda: mocked_get_note)
-    def test_evernote_project_post_parser(self, mock_note_getter):
+    def test_evernote_project_post_parser(self):
         wp_post = WordPressItem.createFromEvernote(test_notes[2].guid,
                                                    self.evernote)
         self.assertIsInstance(wp_post, WordPressPost)
@@ -298,7 +293,7 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         self.assertEqual("Nothing to see here.\n", wp_post.content)
         self.assertIsInstance(wp_post.project, WordPressPost)
         self.assertEqual(583, wp_post.project.id)
-        self.assertSetEqual(set((wp_post.project,)), wp_post._ref_wp_items)
+        self.assertSetEqual(set(), wp_post._ref_wp_items)
 
 class TestNoteMetadataAttrMatching(unittest.TestCase):
     
@@ -357,28 +352,24 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
     def setUp(self, mock_logging, mock_init_wp_client, mock_init_en_client):
         super(TestEvernoteWordPressPublisher, self).setUp()
         self.evernote = EvernoteApiWrapper(token='123')
+        self.evernote.getNote = MagicMock(side_effect=mocked_get_note)
         self.wordpress = WordPressApiWrapper('xmlrpc.php', 'user', 'password')
         self.adaptor = EvernoteWordpressAdaptor(self.evernote, self.wordpress)
     
-    # TODO: better way for multiple patching?
-    @patch('my_evernote.EvernoteApiWrapper.getNote',
-           new_callable=lambda: mocked_get_note)
     @patch('wordpress.WordPressApiWrapper.editPost',
            new_callable=lambda: lambda p1, p2: True)
-    def test_update_existing_post(self, mock_edit_post, mock_note_getter):
+    def test_update_existing_post(self, mock_edit_post):
         wp_post = WordPressItem.createFromEvernote(test_notes[2].guid,
                                                    self.evernote)
         self.assertIsInstance(wp_post, WordPressPost)
         wp_post.publishItem(self.wordpress)
     
-    @patch('my_evernote.EvernoteApiWrapper.getNote',
-           new_callable=lambda: mocked_get_note)
     @patch('my_evernote.EvernoteApiWrapper.updateNote')
     @patch('wordpress.WordPressApiWrapper.newPost',
            new_callable=lambda: lambda p1, p2: 660)
     @patch('wordpress_evernote.logger')
     def test_publish_project_note_existing_project_index(
-          self, mock_logger, mock_newpost, mock_note_update, mock_note_getter):
+          self, mock_logger, mock_newpost, mock_note_update):
         wp_post = WordPressItem.createFromEvernote(test_notes[4].guid,
                                                    self.evernote)
         self.assertIsInstance(wp_post, WordPressPost)
