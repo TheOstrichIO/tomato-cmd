@@ -28,10 +28,10 @@ class EvernoteNote(object):
         with open(fpath, 'r') as note_file:
             return note_file.read()
 
-test_notebooks = [EvernoteNotebook('abcd1234-5678-abef-7890-abcd1234abcd',
-                                   'Blog Posts'),
-                  EvernoteNotebook('abcd1234-5678-cdef-7890-abcd1234abcd',
-                                   'Blog Images'),]
+test_notebooks = [
+    EvernoteNotebook('abcd1234-5678-abef-7890-abcd1234abcd', 'Blog Posts'),
+    EvernoteNotebook('abcd1234-5678-cdef-7890-abcd1234abcd', 'Blog Images'),
+    ]
 
 test_notes = {
     'note-with-id-thumbnail-attached-image-body-link':
