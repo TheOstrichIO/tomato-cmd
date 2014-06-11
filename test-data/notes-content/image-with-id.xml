@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
+<en-note style="word-wrap: break-word; -webkit-nbsp-mode: space; -webkit-line-break: after-white-space;">
+<div>id=277</div>
+<div>title=Test image</div>
+<div>link=http://www.ostricher.com/images/test.png</div>
+<div>parent=<a href="evernote:///view/123/s123/abcd1234-5678-abcd-7890-abcd1234abcd/abcd1234-5678-abcd-7890-abcd1234abcd/" style="color: rgb(105, 170, 53);">Test post note</a></div>
+<div>caption=Image caption</div>
+<div>date_created=&lt;auto&gt;</div>
+<div>description=Description of test image</div>
+<div><br/></div>
+<div>
+<hr/></div>
+<en-media style="height: auto; cursor: default;" type="image/png" hash="8be6578fee9f8c3ce979a909ae297500"/>
+</en-note>

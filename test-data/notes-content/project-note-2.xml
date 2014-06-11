@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
+<en-note style="word-wrap: break-word; -webkit-nbsp-mode: space; -webkit-line-break: after-white-space;">
+<div>id=&lt;auto&gt;</div>
+<div>type=post</div>
+<div>content_format=markdown</div>
+title=New project note
+<div>slug=&lt;auto&gt;</div>
+<div>categories=Meta</div>
+<div>tags="Multiword, Tag",test-tag</div>
+<div>project=<a href="evernote:///view/123/s123/abcd1234-aaaa-0000-ffff-abcd1234abcd/abcd1234-aaaa-0000-ffff-abcd1234abcd/" style="color: rgb(105, 170, 53);">Project index</a></div>
+<div>link=&lt;auto&gt;</div>
+<div><br/></div>
+<div>
+<hr/></div>
+<br/>
+<div>Nothing to see here.</div>
+</en-note>

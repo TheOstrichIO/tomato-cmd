@@ -1,5 +1,6 @@
 import unittest
 from mock import patch, Mock, MagicMock
+import os
 
 import wordpress
 import wordpress_evernote
@@ -17,144 +18,53 @@ class EvernoteNote(object):
     def __init__(self, **kwargs):
         for k, v in kwargs.iteritems():
             setattr(self, k, v)
+        if 'content' in kwargs:
+            if self.content.lower().endswith('.xml'):
+                # it's a test-data filename, not actual content
+                self.content = self._get_content(self.content)
+            
+    def _get_content(self, fname):
+        fpath = os.path.join('test-data', 'notes-content', fname)
+        with open(fpath, 'r') as note_file:
+            return note_file.read()
 
 test_notebooks = [EvernoteNotebook('abcd1234-5678-abef-7890-abcd1234abcd',
                                    'Blog Posts'),
                   EvernoteNotebook('abcd1234-5678-cdef-7890-abcd1234abcd',
                                    'Blog Images'),]
 
-test_notes = [
-       EvernoteNote(guid='abcd1234-5678-abcd-7890-abcd1234abcd',
-                    title='Test post note',
-                    notebookGuid='abcd1234-5678-abef-7890-abcd1234abcd',
-                    content=
-"""<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
-<en-note style="word-wrap: break-word; -webkit-nbsp-mode: space; -webkit-line-break: after-white-space;">
-<div>
-<div>id=544</div>
-<div>type=post</div>
-<div>content_format=markdown</div>
-title=Test Post with Title out of Div and = Symbol
-<div>slug=&lt;auto&gt;</div>
-<div>categories=Meta</div>
-<div>tags="Multiword, Tag",test-tag</div>
-<div>thumbnail=<a href="evernote:///view/123/s123/abcd1234-1234-abcd-1234-abcd1234abcd/abcd1234-1234-abcd-1234-abcd1234abcd/" style="color: rgb(105, 170, 53);">test-thumb.png</a></div>
-<div>hemingwayapp-grade=8</div>
-<div><br/></div>
-<div>
-<hr/></div>
-<br/>
-<div>First line of content.<br/></div>
-<div><br/></div>
-<div>Some content between br-divs, before closing of div that started before meta<br/></div>
-<div><br/></div>
-</div>
-<div>A markdown list with no line breaks between items:</div>
-<div><br/></div>
-<div>1. List item.</div>
-<div>2. List item and &quot;&amp;&quot; HTML escaping test.</div>
-<div>3. List item that continues on</div>
-<div>   following line with indentation.</div>
-<div><br/></div>
-<div>First line after markdown list, followed by line that contains only a "comment"</div>
-<div><br/></div>
-<div>&lt;!--more--&gt;</div>
-<div><br/></div>
-<div>Line with image tag pointing to image-note as Evernote linked note: <a href="evernote:///view/123/s123/abcd1234-1234-abcd-1234-abcd1234abcd/abcd1234-1234-abcd-1234-abcd1234abcd/" style="color: rgb(105, 170, 53);">test-thumb.png</a></div>
-<div><br/></div>
-<div>Line with Evernote TODO checkbox followed by some text (<en-todo/>do this better). Parser should warn.</div>
-<div><br/></div>
-<div>And here's a [link to an existing post](<a href="evernote:///view/123/s123/abcd1234-5678-0000-7890-abcd1234abcd/abcd1234-5678-0000-7890-abcd1234abcd/" style="color: rgb(105, 170, 53);">Another test note</a>)!</div>
-<div><br/></div>
-<div>Finish with one [link with a tag](<a href="http://www.ostricher.com/">http://www.ostricher.com/</a>), and [one link with no a tag but with title](http://www.ostricher.com/ "Ostricher.com site"), followed by some text.</div>
-</en-note>"""),
-       EvernoteNote(guid='abcd1234-1234-abcd-1234-abcd1234abcd',
-                    title='Test image note',
-                    notebookGuid='abcd1234-5678-cdef-7890-abcd1234abcd',
-                    content=
-"""<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
-<en-note style="word-wrap: break-word; -webkit-nbsp-mode: space; -webkit-line-break: after-white-space;">
-<div>id=277</div>
-<div>title=Test image</div>
-<div>link=http://www.ostricher.com/images/test.png</div>
-<div>parent=<a href="evernote:///view/123/s123/abcd1234-5678-abcd-7890-abcd1234abcd/abcd1234-5678-abcd-7890-abcd1234abcd/" style="color: rgb(105, 170, 53);">Test post note</a></div>
-<div>caption=Image caption</div>
-<div>date_created=&lt;auto&gt;</div>
-<div>description=Description of test image</div>
-<div><br/></div>
-<div>
-<hr/></div>
-<en-media style="height: auto; cursor: default;" type="image/png" hash="8be6578fee9f8c3ce979a909ae297500"/>
-</en-note>"""),
-       EvernoteNote(guid='abcd1234-5678-0000-7890-abcd1234abcd',
-                    title='Another test note',
-                    notebookGuid='abcd1234-5678-abef-7890-abcd1234abcd',
-                    content=
-"""<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
-<en-note style="word-wrap: break-word; -webkit-nbsp-mode: space; -webkit-line-break: after-white-space;">
-<div>id=303</div>
-<div>type=post</div>
-<div>content_format=markdown</div>
-title=Another test note
-<div>slug=&lt;auto&gt;</div>
-<div>categories=</div>
-<div>tags=</div>
-<div>thumbnail=</div>
-<div>project=<a href="evernote:///view/123/s123/abcd1234-aaaa-0000-ffff-abcd1234abcd/abcd1234-aaaa-0000-ffff-abcd1234abcd/" style="color: rgb(105, 170, 53);">Project index</a></div>
-<div>hemingwayapp-grade=8</div>
-<div>link=http://www.ostricher.com/2014/04/another-test-note</div>
-<div><br/></div>
-<div>
-<hr/></div>
-<br/>
-<div>Nothing to see here.</div>
-</en-note>"""),
-       EvernoteNote(guid='abcd1234-aaaa-0000-ffff-abcd1234abcd',
-                    title='Test project index page',
-                    notebookGuid='abcd1234-5678-1928-7890-abcd1234abcd',
-                    content=
-"""<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
-<en-note style="word-wrap: break-word; -webkit-nbsp-mode: space; -webkit-line-break: after-white-space;">
-<div>id=583</div>
-<div>type=page</div>
-<div>content_format=markdown</div>
-title=Project index
-<div>slug=&lt;auto&gt;</div>
-<div>thumbnail=</div>
-<div>link=http://www.ostricher.com/projects/test-project</div>
-<div><br/></div>
-<div>
-<hr/></div>
-<br/>
-<div>Nothing to see here.</div>
-</en-note>"""),
-       EvernoteNote(guid='abcd1234-aaaa-2048-ffff-abcd1234abcd',
-                    title='New project note',
-                    notebookGuid='abcd1234-5678-1928-7890-abcd1234abcd',
-                    content=
-"""<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
-<en-note style="word-wrap: break-word; -webkit-nbsp-mode: space; -webkit-line-break: after-white-space;">
-<div>id=&lt;auto&gt;</div>
-<div>type=post</div>
-<div>content_format=markdown</div>
-title=New project note
-<div>slug=&lt;auto&gt;</div>
-<div>categories=Meta</div>
-<div>tags="Multiword, Tag",test-tag</div>
-<div>project=<a href="evernote:///view/123/s123/abcd1234-aaaa-0000-ffff-abcd1234abcd/abcd1234-aaaa-0000-ffff-abcd1234abcd/" style="color: rgb(105, 170, 53);">Project index</a></div>
-<div>link=&lt;auto&gt;</div>
-<div><br/></div>
-<div>
-<hr/></div>
-<br/>
-<div>Nothing to see here.</div>
-</en-note>"""),
-]
+test_notes = {
+    'note-with-id-thumbnail-attached-image-body-link':
+    EvernoteNote(
+        guid='abcd1234-5678-abcd-7890-abcd1234abcd',
+        title='Test post note',
+        notebookGuid='abcd1234-5678-abef-7890-abcd1234abcd',
+        content='note-1.xml'),
+    'image-with-id':
+    EvernoteNote(
+        guid='abcd1234-1234-abcd-1234-abcd1234abcd',
+        title='Test image note',
+        notebookGuid='abcd1234-5678-cdef-7890-abcd1234abcd',
+        content='image-with-id.xml'),
+    'project-page-with-id-nothumb':
+    EvernoteNote(
+        guid='abcd1234-aaaa-0000-ffff-abcd1234abcd',
+        title='Test project index page',
+        notebookGuid='abcd1234-5678-1928-7890-abcd1234abcd',
+        content='project-page-1.xml'),
+    'project-note-with-id-nothumb':
+    EvernoteNote(
+        guid='abcd1234-5678-0000-7890-abcd1234abcd',
+        title='Another test note',
+        notebookGuid='abcd1234-5678-abef-7890-abcd1234abcd',
+        content='project-note-1.xml'),
+    'project-note-noid':
+    EvernoteNote(
+        guid='abcd1234-aaaa-2048-ffff-abcd1234abcd',
+        title='New project note',
+        notebookGuid='abcd1234-5678-1928-7890-abcd1234abcd',
+        content='project-note-2.xml'),
+    }
 
 expected_content = [
 """First line of content.
@@ -203,7 +113,7 @@ title=New project note
 </en-note>"""
 
 def mocked_get_note(guid):
-    for note in test_notes:
+    for note in test_notes.values():
         if note.guid == guid:
             return note
 
@@ -216,8 +126,8 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         self.evernote.getNote = MagicMock(side_effect=mocked_get_note)
     
     def test_evernote_image_parser(self):
-        wp_image = WordPressItem.createFromEvernote(test_notes[1].guid,
-                                                    self.evernote)
+        note = test_notes['image-with-id']
+        wp_image = WordPressItem.createFromEvernote(note.guid, self.evernote)
         self.assertIsInstance(wp_image, WordPressImageAttachment)
         self.assertEqual(277, wp_image.id)
         self.assertEqual('Test image', wp_image.title)
@@ -232,8 +142,8 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         self.assertSetEqual(set(), wp_image._ref_wp_items)
     
     def test_evernote_post_parser(self):
-        wp_post = WordPressItem.createFromEvernote(test_notes[0].guid,
-                                                   self.evernote)
+        note = test_notes['note-with-id-thumbnail-attached-image-body-link']
+        wp_post = WordPressItem.createFromEvernote(note.guid, self.evernote)
         self.assertIsInstance(wp_post, WordPressPost)
         self.assertEqual('post', wp_post.post_type)
         self.assertEqual('markdown', wp_post.content_format)
@@ -259,8 +169,8 @@ class TestEvernoteWordPressParser(unittest.TestCase):
           wp_post._ref_wp_items)
     
     def test_evernote_page_parser(self):
-        wp_post = WordPressItem.createFromEvernote(test_notes[3].guid,
-                                                   self.evernote)
+        note = test_notes['project-page-with-id-nothumb']
+        wp_post = WordPressItem.createFromEvernote(note.guid, self.evernote)
         self.assertIsInstance(wp_post, WordPressPost)
         self.assertEqual('page', wp_post.post_type)
         self.assertEqual('markdown', wp_post.content_format)
@@ -277,8 +187,8 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         self.assertSetEqual(set(), wp_post._ref_wp_items)
     
     def test_evernote_project_post_parser(self):
-        wp_post = WordPressItem.createFromEvernote(test_notes[2].guid,
-                                                   self.evernote)
+        note = test_notes['project-note-with-id-nothumb']
+        wp_post = WordPressItem.createFromEvernote(note.guid, self.evernote)
         self.assertIsInstance(wp_post, WordPressPost)
         self.assertEqual('post', wp_post.post_type)
         self.assertEqual('markdown', wp_post.content_format)
@@ -355,28 +265,30 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
         wordpress_evernote.logger = MagicMock()
         self.evernote = EvernoteApiWrapper(token='123')
         self.evernote.getNote = MagicMock(side_effect=mocked_get_note)
+        self.evernote.updateNote = MagicMock()
         self.wordpress = WordPressApiWrapper('xmlrpc.php', 'user', 'password')
         self.adaptor = EvernoteWordpressAdaptor(self.evernote, self.wordpress)
     
     def test_update_existing_post(self):
         self.wordpress.editPost = MagicMock(return_value=True)
-        wp_post = WordPressItem.createFromEvernote(test_notes[2].guid,
-                                                   self.evernote)
+        note = test_notes['project-note-with-id-nothumb']
+        wp_post = WordPressItem.createFromEvernote(note.guid, self.evernote)
         self.assertIsInstance(wp_post, WordPressPost)
         wp_post.publishItem(self.wordpress)
         self.assertTrue(self.wordpress.editPost.called)
     
     def test_publish_project_note_existing_project_index(self):
-        self.evernote.updateNote = MagicMock()
         self.wordpress.newPost = MagicMock(return_value=660)
-        wp_post = WordPressItem.createFromEvernote(test_notes[4].guid,
-                                                   self.evernote)
+        note = test_notes['project-note-noid']
+        wp_post = WordPressItem.createFromEvernote(note.guid, self.evernote)
         self.assertIsInstance(wp_post, WordPressPost)
         self.assertIsNone(wp_post.id)
         wp_post.publishItem(self.wordpress)
         self.assertEqual(660, wp_post.id)
-        self.adaptor.update_note_metadata_from_wordpress_post(
-            test_notes[4], wp_post)
+        self.adaptor.update_note_metadata_from_wordpress_post(note, wp_post)
         self.assertListEqual(expected_post_publish_note_content.split('\n'),
-                             test_notes[4].content.split('\n'))
-        self.evernote.updateNote.assert_called_once_with(test_notes[4])
+                             note.content.split('\n'))
+        self.evernote.updateNote.assert_called_once_with(note)
+    
+#    def test_publish_new_note_with_new_thumbnail(self):
+        
