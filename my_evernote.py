@@ -242,10 +242,10 @@ class EvernoteApiWrapper():
     
     @ratelimit_wait_and_retry
     def getNote(self, note_genlink, with_content_flag=True):
-        """Get Evernote Note object by GUID.
+        """Get Evernote Note object by GUID or generalized link.
         
-        :param note_genlink: The requested note generalized link
-        :param with_content_flag: If `True`, includes note content in response
+        :param note_genlink: The requested note generalized link or GUID.
+        :param with_content_flag: If `True`, includes note content in response.
         """
         note_guid = self.get_note_guid(note_genlink)
         if note_guid in self._cache:
