@@ -192,8 +192,17 @@ class WordPressItem(object):
                 if self.content.endswith('\n\n\n'):
                     self.content = self.content[:-1]
         ## Start here
-        # Parse Evernote note content
-        root = ElementTree.fromstring(note.content)
+        # Parse Evernote note content using XMLParser
+        parser = ElementTree.XMLParser()
+        # Default XMLParser is not full XHTML, so it doesn't know about all
+        # valid XHTML entities (such as &nbsp;), so the following code is
+        # needed in order to allow these entities.
+        # (see: http://stackoverflow.com/questions/7237466 and
+        #       http://stackoverflow.com/questions/14744945 )
+        # Valid XML entities: quot, amp, apos, lt and gt.
+        parser.parser.UseForeignDTD(True)
+        parser.entity['nbsp'] = ' '
+        root = ElementTree.fromstring(note.content, parser=parser)
         in_meta = True
         for e in root.iter():
             if 'hr' == e.tag:

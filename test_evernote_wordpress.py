@@ -160,7 +160,7 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         self.assertEqual('another-test-note',
                          wp_post.get_slug())
         self.assertEqual('', wp_post.thumbnail)
-        self.assertEqual("Nothing to see here.\n", wp_post.content)
+        self.assertEqual("Nothing to see here .\n", wp_post.content)
         self.assertIsInstance(wp_post.project, WordPressPost)
         self.assertEqual(583, wp_post.project.id)
         self.assertSetEqual(set(), wp_post._ref_wp_items)
