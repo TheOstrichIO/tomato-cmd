@@ -71,6 +71,7 @@ class WordPressItem(object):
         # process content Evernote links
         #  (put partial parsing in cache for recursive link processing!)
         cls._cache[guid] = parsed_item
+        parsed_item._process_en_note_title(note.title)
         parsed_item.processLinks(en_wrapper)
         return parsed_item
             
@@ -206,8 +207,17 @@ class WordPressItem(object):
             else:
                 logger.warn('Unhandled tag "%s"', e)
     
+    def _process_en_note_title(self, note_title):
+        """Optionally override in subclass to do something with Evernote note
+        title, when initializing item from Evernote.
+        
+        This is called from`create_from_evernote`, after initializing the note.
+        """
+        pass
+    
     def publishItem(self, wp_wrapper):
         """Publish the WordPress item represented by this instance.
+        
         Uses specified `wp_wrapper` to interact with a WordPress site.
         If instance has an ID, will try to update existing item with this ID.
         Otherwise, will create a new item and update relevant
@@ -256,6 +266,9 @@ class WordPressImageAttachment(WordPressItem):
                 return '[caption id="attachment_%d" align="alignnone"]%s %s' \
                        '[/caption]' % (self.id, imtag, self.caption)
             return imtag
+    
+    def _process_en_note_title(self, note_title):
+        self.filename = note_title.split()[0]
     
     def processLinks(self, en_wrapper=None):
         if EvernoteApiWrapper.is_evernote_url(self.parent):

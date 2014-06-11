@@ -43,7 +43,7 @@ test_notes = {
     'image-with-id':
     EvernoteNote(
         guid='abcd1234-1234-abcd-1234-abcd1234abcd',
-        title='Test image note',
+        title='test.png <277>',
         notebookGuid='abcd1234-5678-cdef-7890-abcd1234abcd',
         content='image-with-id.xml'),
     'project-page-with-id-nothumb':
@@ -85,6 +85,7 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         self.assertIsInstance(wp_image, WordPressImageAttachment)
         self.assertEqual(277, wp_image.id)
         self.assertEqual('Test image', wp_image.title)
+        self.assertEqual('test.png', wp_image.filename)
         self.assertEqual('http://www.ostricher.com/images/test.png',
                          wp_image.link)
         self.assertEqual('Image caption', wp_image.caption)
