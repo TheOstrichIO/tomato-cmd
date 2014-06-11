@@ -16,6 +16,7 @@ EvernoteNotebook = namedtuple('EvernoteNotebook', ['guid', 'name'])
 class EvernoteNote(object):
     """Dummy Evernote Note class for mocking note object in unit tests."""
     def __init__(self, **kwargs):
+        self.resources = list()
         for k, v in kwargs.iteritems():
             setattr(self, k, v)
         if 'content' in kwargs:
@@ -45,7 +46,8 @@ test_notes = {
         guid='abcd1234-1234-abcd-1234-abcd1234abcd',
         title='test.png <277>',
         notebookGuid='abcd1234-5678-cdef-7890-abcd1234abcd',
-        content='image-with-id.xml'),
+        content='image-with-id.xml',
+        resources=[MagicMock()]),
     'project-page-with-id-nothumb':
     EvernoteNote(
         guid='abcd1234-aaaa-0000-ffff-abcd1234abcd',

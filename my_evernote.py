@@ -49,8 +49,8 @@ class EvernoteApiWrapper():
     
     _cache = dict()
     
-    @classmethod
-    def noteTemplate(cls):
+    @staticmethod
+    def noteTemplate():
         return Template('\r\n'.join([
           '<?xml version="1.0" encoding="UTF-8"?>',
           '<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">',
@@ -73,8 +73,8 @@ class EvernoteApiWrapper():
         note.updated = updated
         return note
     
-    @classmethod
-    def makeResource(cls, src_file, filename, mime=None):
+    @staticmethod
+    def makeResource(src_file, filename, mime=None):
         if not mime:
             mime = mimetypes.guess_type(filename)[0]
         if not mime:
@@ -241,17 +241,21 @@ class EvernoteApiWrapper():
         self._note_store.updateNote(self._client.token, note)
     
     @ratelimit_wait_and_retry
-    def getNote(self, note_genlink, with_content_flag=True):
+    def getNote(self, genlink, with_content=True, with_resource_data=True):
         """Get Evernote Note object by GUID or generalized link.
         
-        :param note_genlink: The requested note generalized link or GUID.
-        :param with_content_flag: If `True`, includes note content in response.
+        :param genlink: The requested note generalized link or GUID.
+        :param with_content: If `True`, includes note content in response.
+        :param with_resource_data: If `True`, includes resources data in
+                                   response.
         """
-        note_guid = self.get_note_guid(note_genlink)
+        note_guid = self.get_note_guid(genlink)
         if note_guid in self._cache:
             return self._cache[note_guid]
         note = self._note_store.getNote(self._client.token,
-                                        note_guid, with_content_flag,
-                                        False, False, False)
+                                        note_guid,
+                                        with_content,
+                                        with_resource_data,
+                                        False, False)
         self._cache[note_guid] = note
         return note

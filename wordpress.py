@@ -72,6 +72,7 @@ class WordPressItem(object):
         #  (put partial parsing in cache for recursive link processing!)
         cls._cache[guid] = parsed_item
         parsed_item._process_en_note_title(note.title)
+        parsed_item._process_en_note_resources(note.resources)
         parsed_item.processLinks(en_wrapper)
         return parsed_item
             
@@ -211,7 +212,20 @@ class WordPressItem(object):
         """Optionally override in subclass to do something with Evernote note
         title, when initializing item from Evernote.
         
-        This is called from`create_from_evernote`, after initializing the note.
+        This is called from `create_from_evernote`,
+         after initializing the note.
+        """
+        pass
+    
+    def _process_en_note_resources(self, note_resources):
+        """Optionally override in subclass to do something with Evernote
+        resources, when initialized from Evernote note.
+        
+        This is called from `create_from_evernote`,
+         after initializing the note.
+        
+        :param note_resources: List of resources attached to the note
+        :type note_resources: list
         """
         pass
     
@@ -270,6 +284,18 @@ class WordPressImageAttachment(WordPressItem):
     def _process_en_note_title(self, note_title):
         self.filename = note_title.split()[0]
     
+    def _process_en_note_resources(self, note_resources):
+        if 0 == len(note_resources):
+            raise RuntimeError('Image note has no attached resources')
+        resource = note_resources[0]
+        if 1 < len(note_resources):
+            logger.warning('Image note has too many attached resources (%d). '
+                           'Choosing the first one, arbitrarily.',
+                           len(note_resources))
+        self._image_data = resource.data.body
+        self._image_mime = resource.mime
+        logger.debug('Got image with mimetype %s', self.mimetype)
+    
     def processLinks(self, en_wrapper=None):
         if EvernoteApiWrapper.is_evernote_url(self.parent):
             self.parent = WordPressItem.createFromEvernote(self.parent,
@@ -280,6 +306,16 @@ class WordPressImageAttachment(WordPressItem):
         "Returns a file-like object for reading image data."
         return urllib2.urlopen(self.link)
         # TODO: handle case of Evernote resource...
+    
+    @property
+    def image_data(self):
+        """Image attachment binary data."""
+        return self._image_data
+    
+    @property
+    def mimetype(self):
+        """Image attachment mimetype."""
+        return self._image_mime
 
 class WordPressPost(WordPressItem):
     _slots = frozenset(('id', 'title', 'slug', 'post_type', 'author', 'tags',
