@@ -66,26 +66,6 @@ test_notes = {
         content='project-note-2.xml'),
     }
 
-expected_post_publish_note_content = \
-"""<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
-<en-note style="word-wrap: break-word; -webkit-nbsp-mode: space; -webkit-line-break: after-white-space;">
-<div>id=660</div>
-<div>type=post</div>
-<div>content_format=markdown</div>
-title=New project note
-<div>slug=&lt;auto&gt;</div>
-<div>categories=Meta</div>
-<div>tags="Multiword, Tag",test-tag</div>
-<div>project=<a href="evernote:///view/123/s123/abcd1234-aaaa-0000-ffff-abcd1234abcd/abcd1234-aaaa-0000-ffff-abcd1234abcd/" style="color: rgb(105, 170, 53);">Project index</a></div>
-<div>link=&lt;auto&gt;</div>
-<div><br/></div>
-<div>
-<hr/></div>
-<br/>
-<div>Nothing to see here.</div>
-</en-note>"""
-
 def mocked_get_note(guid):
     for note in test_notes.values():
         if note.guid == guid:
@@ -262,7 +242,12 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
         wp_post.publishItem(self.wordpress)
         self.assertEqual(660, wp_post.id)
         self.adaptor.update_note_metadata_from_wordpress_post(note, wp_post)
-        self.assertListEqual(expected_post_publish_note_content.split('\n'),
+        expected_note = EvernoteNote(
+            guid='abcd1234-aaaa-2048-ffff-abcd1234abcd',
+            title='New project note',
+            notebookGuid='abcd1234-5678-1928-7890-abcd1234abcd',
+            content='published-project-note.xml')
+        self.assertListEqual(expected_note.content.split('\n'),
                              note.content.split('\n'))
         self.evernote.updateNote.assert_called_once_with(note)
     
