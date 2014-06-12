@@ -101,8 +101,8 @@ class EvernoteApiWrapper():
     
     @staticmethod
     def is_evernote_url(url):
-        return (url.startswith('evernote:///view/') or
-                url.startswith('https://www.evernote.com/'))
+        return url and ((url.startswith('evernote:///view/') or
+                         url.startswith('https://www.evernote.com/')))
     
     @staticmethod
     def parseNoteLinkUrl(url):
