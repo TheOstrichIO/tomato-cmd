@@ -186,11 +186,11 @@ post_parser.set_defaults(func=post_note)
 ###############################################################################
 
 def _images_to_evernote(adaptor, unused_args):
-    for wp_image in adaptor.wordpress.mediaItemGenerator():
+    for wp_image in adaptor.wordpress.media_item_generator():
         save_wp_image_to_evernote(adaptor.evernote, '.zImages', wp_image)
 
 def _custom_fields(adaptor, unused_args):
-    for wp_post in adaptor.wordpress.postGenerator():
+    for wp_post in adaptor.wordpress.post_generator():
         print wp_post, wp_post.custom_fields
 
 def main():

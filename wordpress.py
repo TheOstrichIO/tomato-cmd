@@ -354,7 +354,7 @@ class WordPressImageAttachment(WordPressItem):
         if self.parent and hasattr(self.parent, 'id'):
             as_post = wp_wrapper.get_post(self.id)
             as_post.parent_id = self.parent.id
-            if not wp_wrapper.editPost(self.id, as_post):
+            if not wp_wrapper.edit_post(self.id, as_post):
                 raise RuntimeWarning('Failed setting parent ID to %d',
                                      self.parent.id)
 
@@ -510,7 +510,7 @@ class WordPressPost(WordPressItem):
             xmlrpc_post = self.asXmlRpcPost()
         elif 'page' == self.post_type:
             xmlrpc_post = self.asXmlRpcPage()
-        self.id = wp_wrapper.newPost(xmlrpc_post)
+        self.id = wp_wrapper.new_post(xmlrpc_post)
     
     def update_existing(self, wp_wrapper):
         """Update existing post based on this instance.
@@ -529,40 +529,47 @@ class WordPressPost(WordPressItem):
             xmlrpc_post = self.asXmlRpcPost()
         elif 'page' == self.post_type:
             xmlrpc_post = self.asXmlRpcPage()
-        if not wp_wrapper.editPost(xmlrpc_post):
+        if not wp_wrapper.edit_post(xmlrpc_post):
             raise RuntimeError('Failed updating WordPress post')
 
 class WordPressApiWrapper(object):
+    """WordPress client API wrapper class."""
     
     def __init__(self, xmlrpc_url, username, password):
+        """Initialize WordPress client API wrapper.
+        
+        :param xmlrpc_url: Full URL to xmlrpc.php of target Wordpress site.
+        :param username: Username to login to Wordpress site with API rights.
+        :param password: Password to Wordpress account for user.
+        """
         self._init_wp_client(xmlrpc_url, username, password)
     
     def _init_wp_client(self, xmlrpc_url, username, password):
         self._wp = Client(xmlrpc_url, username, password)
     
-    def mediaItemGenerator(self, parent_id=None):
-        "Generates WordPress attachment objects."
+    def media_item_generator(self, parent_id=None):
+        """Generates WordPress attachment objects."""
         for media_item in self._wp.call(media.GetMediaLibrary(
                             {'parent_id': parent_id and str(parent_id)})):
             wpImage = WordPressImageAttachment.fromWpMediaItem(media_item)
             logger.debug(u'Yielding WordPress media item %s', wpImage)
             yield wpImage
     
-    def postGenerator(self):
-        "Generates WordPress post objects"
+    def post_generator(self):
+        """Generate WordPress post objects."""
         for post in self._wp.call(posts.GetPosts()):
             yield post
     
-    def newPost(self, xmlrpc_post):
-        "Wrapper for invoking the NewPost method"
+    def new_post(self, xmlrpc_post):
+        """Wrapper for invoking the NewPost method."""
         return self._wp.call(posts.NewPost(xmlrpc_post))
     
     def get_post(self, post_id):
         """Wrapper for invoking the GetPost method."""
         return self._wp.call(posts.GetPost(post_id))
     
-    def editPost(self, xmlrpc_post):
-        "Wrapper for invoking the EditPost method"
+    def edit_post(self, xmlrpc_post):
+        """Wrapper for invoking the EditPost method."""
         return self._wp.call(posts.EditPost(xmlrpc_post.id, xmlrpc_post))
     
     def upload_file(self, data):

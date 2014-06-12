@@ -236,15 +236,15 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
         self.adaptor = EvernoteWordpressAdaptor(self.evernote, self.wordpress)
     
     def test_update_existing_post(self):
-        self.wordpress.editPost = MagicMock(return_value=True)
+        self.wordpress.edit_post = MagicMock(return_value=True)
         note = test_notes['project-note-with-id-nothumb']
         wp_post = WordPressItem.createFromEvernote(note.guid, self.evernote)
         self.assertIsInstance(wp_post, WordPressPost)
         wp_post.publishItem(self.wordpress)
-        self.assertTrue(self.wordpress.editPost.called)
+        self.assertTrue(self.wordpress.edit_post.called)
     
     def test_publish_project_note_existing_project_index(self):
-        self.wordpress.newPost = MagicMock(return_value=660)
+        self.wordpress.new_post = MagicMock(return_value=660)
         note = test_notes['project-note-noid']
         wp_post = WordPressItem.createFromEvernote(note.guid, self.evernote)
         self.assertIsInstance(wp_post, WordPressPost)
@@ -264,7 +264,7 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
     def test_upload_new_image_existing_parent(self):
         self.wordpress.upload_file = MagicMock(return_value={'id': 792,})
         self.wordpress.get_post = MagicMock()
-        self.wordpress.editPost = MagicMock(return_value=True)
+        self.wordpress.edit_post = MagicMock(return_value=True)
         note = test_notes['image-noid-existing-parent']
         wp_image = WordPressItem.createFromEvernote(note.guid, self.evernote)
         self.assertIsInstance(wp_image, WordPressImageAttachment)
@@ -283,8 +283,8 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
         self.evernote.updateNote.assert_called_once_with(note)
         self.assertTrue(self.wordpress.upload_file.called)
         self.wordpress.get_post.assert_called_once_with(792)
-        self.assertTrue(self.wordpress.editPost.called)
-        self.wordpress.editPost.assert_called_once_with(
+        self.assertTrue(self.wordpress.edit_post.called)
+        self.wordpress.edit_post.assert_called_once_with(
             792, self.wordpress.get_post.return_value)
     
     def test_publish_new_note_with_new_thumbnail(self):
