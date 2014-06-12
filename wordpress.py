@@ -7,12 +7,12 @@ import urllib2
 import re
 
 # WordPress API:
-import wordpress_xmlrpc
+#import wordpress_xmlrpc
 from wordpress_xmlrpc import Client #, WordPressPost
 from wordpress_xmlrpc import WordPressPost as XmlRpcPost
+from wordpress_xmlrpc.compat import xmlrpc_client
 #from wordpress_xmlrpc.methods.posts import GetPosts, NewPost
 #from wordpress_xmlrpc.methods.users import GetUserInfo
-#from wordpress_xmlrpc.compat import xmlrpc_client
 from wordpress_xmlrpc.methods import media, posts
 
 import slugify
@@ -251,14 +251,15 @@ class WordPressItem(object):
         @type wp_wrapper: WordPressApiWrapper
         """
         if self.id is None:
-            self.publishNew(wp_wrapper)
+            self.publish_new(wp_wrapper)
         else:
-            self.updateExisting(wp_wrapper)
+            self.update_existing(wp_wrapper)
 
 class WordPressImageAttachment(WordPressItem):
     
     _slots = frozenset(('id', 'title', 'link', 'parent', 'caption',
-                        'date_created', 'description')) # what's with alt?!
+                        'date_created', 'description', 'filename'))
+    # what's with alt?!
     
     @classmethod
     def isInstance(cls, instance):
@@ -325,6 +326,31 @@ class WordPressImageAttachment(WordPressItem):
     def mimetype(self):
         """Image attachment mimetype."""
         return self._image_mime
+    
+    def publish_new(self, wp_wrapper):
+        """Create new image attachment based on this instance.
+        Uses `wp_wrapper` to publish.
+        
+        @type wp_wrapper: WordPressApiWrapper
+        @requires: Target note has no ID set.
+        @raise RuntimeError: In case referenced WordPress items are missing
+                             required fields (IDs / links or images etc.).
+        """
+        if self.id is not None:
+            raise RuntimeError('Cannot publish new image when ID exists')
+        #if not self.isFullyProcessed():
+        #    raise RuntimeError('Image instance not fully processed')
+        data = {
+            'name': self.filename,
+            'type': self.mimetype,
+            'bits': xmlrpc_client.Binary(self.image_data),
+            }
+        # TODO: refactor to parent property
+        # TODO: figure out how to attach media item to post via API
+        #if self.parent and hasattr(self.parent, 'id'):
+        #    data['parent'] = self.parent.id
+        response = wp_wrapper.upload_file(data)
+        self.id = response.get('id')
 
 class WordPressPost(WordPressItem):
     _slots = frozenset(('id', 'title', 'slug', 'post_type', 'author', 'tags',
@@ -461,12 +487,12 @@ class WordPressPost(WordPressItem):
             add_custom_field(post, 'hemingwayapp-grade', self.hemingway_grade)
         return post
     
-    def publishNew(self, wp_wrapper):
+    def publish_new(self, wp_wrapper):
         """Create new post based on this instance.
         Uses `wp_wrapper` to publish.
         
         @type wp_wrapper: WordPressApiWrapper
-        @requires: Target note has no ID set - it will be populated.
+        @requires: Target note has no ID set.
         @raise RuntimeError: In case referenced WordPress items are missing
                                 required fields (IDs / links or images etc.).
         """
@@ -480,7 +506,7 @@ class WordPressPost(WordPressItem):
             xmlrpc_post = self.asXmlRpcPage()
         self.id = wp_wrapper.newPost(xmlrpc_post)
     
-    def updateExisting(self, wp_wrapper):
+    def update_existing(self, wp_wrapper):
         """Update existing post based on this instance.
         Uses `wp_wrapper` to publish.
         
@@ -528,3 +554,7 @@ class WordPressApiWrapper(object):
     def editPost(self, xmlrpc_post):
         "Wrapper for invoking the EditPost method"
         return self._wp.call(posts.EditPost(xmlrpc_post.id, xmlrpc_post))
+    
+    def upload_file(self, data):
+        """Wrapper for invoking the upload file to the blog method."""
+        return self._wp.call(media.UploadFile(data))

@@ -66,6 +66,13 @@ test_notes = {
         title='New project note',
         notebookGuid='abcd1234-5678-1928-7890-abcd1234abcd',
         content='project-note-2.xml'),
+    'image-noid-existing-parent':
+    EvernoteNote(
+        guid='abcd1234-1212-4040-2121--abcd1234abcd',
+        title='new-image.png <auto>',
+        notebookGuid='abcd1234-5678-cdef-7890-abcd1234abcd',
+        content='image-no-id.xml',
+        resources=[MagicMock()]),
     }
 
 def mocked_get_note(guid):
@@ -254,5 +261,24 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
                              note.content.split('\n'))
         self.evernote.updateNote.assert_called_once_with(note)
     
-#    def test_publish_new_note_with_new_thumbnail(self):
-        
+    def test_upload_new_image_existing_parent(self):
+        self.wordpress.upload_file = MagicMock(return_value={'id': 792,})
+        note = test_notes['image-noid-existing-parent']
+        wp_image = WordPressItem.createFromEvernote(note.guid, self.evernote)
+        self.assertIsInstance(wp_image, WordPressImageAttachment)
+        self.assertIsNone(wp_image.id)
+        self.assertIsInstance(wp_image.parent, WordPressPost)
+        self.assertIsNotNone(wp_image.parent.id)
+        self.adaptor.post_to_wordpress_from_note(note.guid)
+        self.assertEqual(792, wp_image.id)
+        expected_note = EvernoteNote(
+            guid='abcd1234-1212-4040-2121--abcd1234abcd',
+            title='new-image.png <auto>',
+            notebookGuid='abcd1234-5678-1928-7890-abcd1234abcd',
+            content='uploaded-image.xml')
+        self.assertListEqual(expected_note.content.split('\n'),
+                             note.content.split('\n'))
+        self.evernote.updateNote.assert_called_once_with(note)
+    
+    def test_publish_new_note_with_new_thumbnail(self):
+        pass

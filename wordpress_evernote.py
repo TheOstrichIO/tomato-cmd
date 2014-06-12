@@ -56,50 +56,49 @@ class EvernoteWordpressAdaptor(object):
         self.wordpress = wp_wrapper
     
     def post_to_wordpress_from_note(self, note_link):
-        """Create WordPress post from Evernote note,
+        """Create WordPress item from Evernote note,
         and publish it to a WordPress blog.
         
-        A note with ID not set will be posted as a new post, and the assigned
-         post ID will be updated in the Evernote note.
-        A note with ID set will result an update of the existing post.
+        A note with ID not set will be posted as a new item, and the assigned
+         item ID will be updated in the Evernote note.
+        A note with ID set will result an update of the existing item.
         
         @warning: Avoid posting the same note to different WordPress accounts,
                   as the IDs might be inconsistent!
         
         Args:
             @param `note_link`: Evernote note link string for
-                                note with post to publish.
+                                note with item to publish.
         """
         # Get note from Evernote
         en_note = self.evernote.getNote(note_link)
-        # Create a WordPress post from note
-        #: :type wp_post: WordPressPost
-        wp_post = WordPressItem.createFromEvernote(en_note, self.wordpress)
-        assert(isinstance(wp_post, WordPressPost))
-        # Post the post (...)
-        wp_post.publishItem(self.wordpress)
-        # Update note metadata from published post (e.g. ID for new post)
-        self.update_note_metadata_from_wordpress_post(en_note, wp_post)
+        # Create a WordPress item from note
+        #: :type wp_post: WordPressItem
+        wp_item = WordPressItem.createFromEvernote(en_note, self.evernote)
+        # Post the item
+        wp_item.publishItem(self.wordpress)
+        # Update note metadata from published item (e.g. ID for new item)
+        self.update_note_metadata_from_wordpress_post(en_note, wp_item)
     
-    def update_note_metadata_from_wordpress_post(self, note, post):
-        """Updates an Evernote post note metadata based on Wordpress post item.
+    def update_note_metadata_from_wordpress_post(self, note, item):
+        """Updates an Evernote WP-item note metadata based on Wordpress item.
         
         Updates only fields that has WordPress as the authoritative source,
         like ID & link.
         
-        @requires: `post` was originally constructed from `note`.
+        @requires: `item` was originally constructed from `note`.
         
         Args:
           @param note: Evernote post-note to update
           @type note: evernote.edam.type.ttypes.Note
-          @param post: Wordpress post from which to update
-          @type post: wordpress.WordPressPost
+          @param item: Wordpress item from which to update
+          @type item: wordpress.WordPressItem
         
         Exceptions:
           @raise RuntimeError: If ID is set and differs
         """
         # TODO: get authoritative attributes from WordPress class
-        attrs_to_update = (('id', str(post.id)), ) #('link', post.link),)
+        attrs_to_update = (('id', str(item.id)), ) #('link', post.link),)
         modified_flag = False
         content_lines = note.content.split('\n')
         for linenum, line in enumerate(content_lines):
@@ -119,6 +118,7 @@ class EvernoteWordpressAdaptor(object):
                         content_lines[linenum] = line.replace(
                             attr_str, '%s=%s' % (attr, post_val))
                         modified_flag = True
+        # TODO: if metadata field doesn't exist - create one?
         if modified_flag:
             logger.info('Writing modified content back to note')
             note.content = '\n'.join(content_lines)
@@ -194,7 +194,6 @@ def _custom_fields(adaptor, unused_args):
         print wp_post, wp_post.custom_fields
 
 def main():
-    # _custom_fields()
     args = wp_en_parser.parse_args()
     adaptor = _get_adaptor(args)
     args.func(adaptor, args)
