@@ -263,6 +263,8 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
     
     def test_upload_new_image_existing_parent(self):
         self.wordpress.upload_file = MagicMock(return_value={'id': 792,})
+        self.wordpress.get_post = MagicMock()
+        self.wordpress.editPost = MagicMock(return_value=True)
         note = test_notes['image-noid-existing-parent']
         wp_image = WordPressItem.createFromEvernote(note.guid, self.evernote)
         self.assertIsInstance(wp_image, WordPressImageAttachment)
@@ -279,6 +281,11 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
         self.assertListEqual(expected_note.content.split('\n'),
                              note.content.split('\n'))
         self.evernote.updateNote.assert_called_once_with(note)
+        self.assertTrue(self.wordpress.upload_file.called)
+        self.wordpress.get_post.assert_called_once_with(792)
+        self.assertTrue(self.wordpress.editPost.called)
+        self.wordpress.editPost.assert_called_once_with(
+            792, self.wordpress.get_post.return_value)
     
     def test_publish_new_note_with_new_thumbnail(self):
         pass

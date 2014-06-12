@@ -329,7 +329,8 @@ class WordPressImageAttachment(WordPressItem):
     
     def publish_new(self, wp_wrapper):
         """Create new image attachment based on this instance.
-        Uses `wp_wrapper` to publish.
+        
+        Use `wp_wrapper` to publish.
         
         @type wp_wrapper: WordPressApiWrapper
         @requires: Target note has no ID set.
@@ -345,12 +346,17 @@ class WordPressImageAttachment(WordPressItem):
             'type': self.mimetype,
             'bits': xmlrpc_client.Binary(self.image_data),
             }
-        # TODO: refactor to parent property
-        # TODO: figure out how to attach media item to post via API
-        #if self.parent and hasattr(self.parent, 'id'):
-        #    data['parent'] = self.parent.id
         response = wp_wrapper.upload_file(data)
         self.id = response.get('id')
+        # The UploadFile method doesn't support setting parent ID,
+        # so we need to get the uploaded image as post item and edit it.
+        # TODO: refactor to parent property
+        if self.parent and hasattr(self.parent, 'id'):
+            as_post = wp_wrapper.get_post(self.id)
+            as_post.parent_id = self.parent.id
+            if not wp_wrapper.editPost(self.id, as_post):
+                raise RuntimeWarning('Failed setting parent ID to %d',
+                                     self.parent.id)
 
 class WordPressPost(WordPressItem):
     _slots = frozenset(('id', 'title', 'slug', 'post_type', 'author', 'tags',
@@ -550,6 +556,10 @@ class WordPressApiWrapper(object):
     def newPost(self, xmlrpc_post):
         "Wrapper for invoking the NewPost method"
         return self._wp.call(posts.NewPost(xmlrpc_post))
+    
+    def get_post(self, post_id):
+        """Wrapper for invoking the GetPost method."""
+        return self._wp.call(posts.GetPost(post_id))
     
     def editPost(self, xmlrpc_post):
         "Wrapper for invoking the EditPost method"
