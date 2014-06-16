@@ -181,7 +181,7 @@ class EvernoteApiWrapper():
         # API call wrapped in generator to simplify pagination and mocking.
         offset = start_offset
         if not page_size:
-            page_size = self.notes_metadata_page_size()
+            page_size = self.notes_metadata_page_size
         while True:
             notes_metadata = self._findNotesMetadata(self._client.token,
                                                      note_filter,
