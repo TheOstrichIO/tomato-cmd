@@ -46,11 +46,10 @@ class EvernoteWordpressAdaptor(object):
     def __init__(self, en_wrapper, wp_wrapper):
         """Initialize Adaptor instance with API wrapper objects.
         
-        Args:
-            @param en_wrapper: Initialized Evernote API wrapper instance.
-            @type en_wrapper: my_evernote.EvernoteApiWrapper
-            @param wp_wrapper: Initialized Wordpress API wrapper instance.
-            @type wp_wrapper: wordpress.WordPressApiWrapper
+        :param en_wrapper: Initialized Evernote API wrapper instance.
+        :type en_wrapper: my_evernote.EvernoteApiWrapper
+        :param wp_wrapper: Initialized Wordpress API wrapper instance.
+        :type wp_wrapper: wordpress.WordPressApiWrapper
         """
         self.evernote = en_wrapper
         self.wordpress = wp_wrapper
@@ -66,9 +65,8 @@ class EvernoteWordpressAdaptor(object):
         @warning: Avoid posting the same note to different WordPress accounts,
                   as the IDs might be inconsistent!
         
-        Args:
-            @param `note_link`: Evernote note link string for
-                                note with item to publish.
+        :param `note_link`: Evernote note link string for
+                            note with item to publish.
         """
         # Get note from Evernote
         en_note = self.evernote.getNote(note_link)
@@ -80,43 +78,54 @@ class EvernoteWordpressAdaptor(object):
         # Update note metadata from published item (e.g. ID for new item)
         self.update_note_metadata_from_wordpress_post(en_note, wp_item)
     
-    def update_note_metadata_from_wordpress_post(self, note, item):
-        """Updates an Evernote WP-item note metadata based on Wordpress item.
+    def sync(self, query):
+        """Sync between WordPress site and notes matched by `query`.
         
-        Updates only fields that has WordPress as the authoritative source,
-        like ID & link.
-        
-        @requires: `item` was originally constructed from `note`.
-        
-        Args:
-          @param note: Evernote post-note to update
-          @type note: evernote.edam.type.ttypes.Note
-          @param item: Wordpress item from which to update
-          @type item: wordpress.WordPressItem
-        
-        Exceptions:
-          @raise RuntimeError: If ID is set and differs
+        :param query: Evernote query used to find notes for sync.
         """
-        # TODO: get authoritative attributes from WordPress class
-        attrs_to_update = (('id', str(item.id)), ) #('link', post.link),)
+        for _, note in self.evernote.get_notes_by_query(query):
+            logger.info('Posting note "%s" (GUID %s)', note.title, note.guid)
+    
+    def detach(self, query):
+        """Detach sync between WordPress site and notes matched by `query`.
+        
+        :param query: Evernote query used to find notes to detach.
+        """
+        attrs_to_update = {'id': '&lt;auto&gt;', 'link': '&lt;auto&gt;', }
+        for _, note_meta in self.evernote.get_notes_by_query(query):
+            note = self.evernote.getNote(note_meta.guid)
+            logger.info('Detaching note "%s" (GUID %s)', note.title, note.guid)
+            self.update_note_metdata(note, attrs_to_update)
+    
+    def update_note_metdata(self, note, attrs_to_update):
+        """Updates an Evernote WP-item note metadata based on dictionary.
+        
+        For every key in `attrs_to_update`, update the metadata attribute `key`
+        with new value `attrs_to_update[key]`.
+        
+        :param note: Evernote post-note to update.
+        :type note: evernote.edam.type.ttypes.Note
+        :param attrs_to_update: Dictionary of attributes to update.
+        :type attrs_to_update: dict
+        """
         modified_flag = False
         content_lines = note.content.split('\n')
         for linenum, line in enumerate(content_lines):
             if self._hr_matcher.search(line):
                 # <hr /> tag means end of metadata section
                 break
-            for attr, post_val in attrs_to_update:
+            for attr, new_val in attrs_to_update.iteritems():
                 m = self._get_attr_matcher(attr).match(line)
                 if m:
                     current_val = m.groupdict()['value']
-                    if post_val == current_val:
+                    if new_val == current_val:
                         logger.debug('No change in attribute "%s"', attr)
                     else:
                         logger.debug('Changing note attribute "%s" from "%s" '
-                                     'to "%s"', attr, current_val, post_val)
+                                     'to "%s"', attr, current_val, new_val)
                         attr_str = m.groupdict()['attr']
                         content_lines[linenum] = line.replace(
-                            attr_str, '%s=%s' % (attr, post_val))
+                            attr_str, '%s=%s' % (attr, new_val))
                         modified_flag = True
         # TODO: if metadata field doesn't exist - create one?
         if modified_flag:
@@ -125,6 +134,26 @@ class EvernoteWordpressAdaptor(object):
             self.evernote.updateNote(note)
         else:
             logger.info('No changes to note content')
+    
+    def update_note_metadata_from_wordpress_post(self, note, item):
+        """Updates an Evernote WP-item note metadata based on Wordpress item.
+        
+        Updates only fields that has WordPress as the authoritative source,
+        like ID & link.
+        
+        :requires: `item` was originally constructed from `note`.
+        
+        :param note: Evernote post-note to update
+        :type note: evernote.edam.type.ttypes.Note
+        :param item: Wordpress item from which to update
+        :type item: wordpress.WordPressItem
+        
+        Exceptions:
+         :raise RuntimeError: If ID is set and differs
+        """
+        # TODO: get authoritative attributes from WordPress class
+        attrs_to_update = {'id': str(item.id), } #('link', post.link),)
+        self.update_note_metdata(note, attrs_to_update)
 
 def save_wp_image_to_evernote(en_wrapper, notebook_name, wp_image,
                               force=False):
@@ -183,6 +212,20 @@ post_parser.add_argument('en_link',
                               '(full link, or just GUID)')
 post_parser.set_defaults(func=post_note)
 
+sync_parser = subparsers.add_parser('sync',
+                                    help='Synchronize Evernote-WordPress')
+sync_parser.add_argument('query',
+                         help='Evernote query for notes to sync')
+sync_parser.set_defaults(func=lambda  adaptor, args: adaptor.sync(args.query))
+
+detach_parser = subparsers.add_parser('detach',
+                                      help='Detach Evernote-WordPress '
+                                           'synchronization')
+detach_parser.add_argument('query',
+                           help='Evernote query for notes to detach')
+detach_parser.set_defaults(func=lambda  adaptor, args:
+                           adaptor.detach(args.query))
+
 ###############################################################################
 
 def _images_to_evernote(adaptor, unused_args):
@@ -196,6 +239,7 @@ def _custom_fields(adaptor, unused_args):
 def main():
     args = wp_en_parser.parse_args()
     adaptor = _get_adaptor(args)
+    #_images_to_evernote(adaptor, args)
     args.func(adaptor, args)
 
 if '__main__' == __name__:

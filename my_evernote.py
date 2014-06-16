@@ -197,21 +197,29 @@ class EvernoteApiWrapper():
                 break
             offset += page_size
     
-    def getNotesByTitle(self, title, in_notebook=None, page_size=None):
+    def get_notes_by_query(self, query, in_notebook=None, page_size=None):
+        """Generate Evernote notes matched by query in a notebook."""
         notebook = in_notebook and self._get_notebook(in_notebook)
-        # remove occurrences of '"' because Evernote ignores it in search
-        query = 'intitle:"%s"' % (title.replace('"', '').encode('utf-8'))
-        note_filter = NoteStore.NoteFilter(words=query,
-                                       notebookGuid=notebook and notebook.guid)
+        query = query.encode('utf-8')
+        note_filter = NoteStore.NoteFilter(
+            words=query,
+            notebookGuid=notebook and notebook.guid)
         spec = NoteStore.NotesMetadataResultSpec(includeTitle=True,
                                                  includeUpdated=True)
         return self._notes_metadata_generator(note_filter, spec,
                                               page_size=page_size)
     
+    def get_notes_by_title(self, title, in_notebook=None, page_size=None):
+        """Generate Evernote notes matching a title in a notebook."""
+        #notebook = in_notebook and self._get_notebook(in_notebook)
+        # remove occurrences of '"' because Evernote ignores it in search
+        query = 'intitle:"%s"' % (title.replace('"', '').encode('utf-8'))
+        return self.get_notes_by_query(query, in_notebook, page_size)
+    
     def getSingleNoteByTitle(self, title, in_notebook=None):
         ret_note = None
-        for offset, note_metadata in self.getNotesByTitle(title,
-                                                          in_notebook, 2):
+        for offset, note_metadata in self.get_notes_by_title(title,
+                                                             in_notebook, 2):
             if 0 == offset:
                 ret_note = note_metadata
             else:

@@ -100,7 +100,7 @@ class WordPressItem(object):
         def parse_link(atag):
             # depends on content-format!
             # in markdown - web-links should parse to the a.text,
-            #  and Evernote links should load the related WpImage
+            #  and Evernote links should load the related WpItem
             # luckily - I don't want to support other formats...
             url = atag.attrib.get('href', '')
             if EvernoteApiWrapper.is_evernote_url(url):
@@ -281,7 +281,7 @@ class WordPressImageAttachment(WordPressItem):
             self.__dict__[slot] = getattr(wp_media_item, slot)
         self.filename = UrlParser(self.link).path_parts()[-1]
     
-    def formatContentLink(self):
+    def format_content_link(self):
         if self.link and self.id:
             imtag = '<a href="%s"><img src="%s" class="wp-image-%d" %s/>' \
                 '</a>' % (self.link, self.link, self.id,
@@ -395,7 +395,15 @@ class WordPressPost(WordPressItem):
         "True if all links and referenced items are valid"
         return self._fully_processed_flag
     
-    def formatContentLink(self):
+    def format_content_link(self, context=None):
+        """Return a formatted link to be used in post content referring to
+        this item.
+        
+        If specified, `context` contains the original href element used,
+        to allow custom processing.
+        """
+#         if self.id:
+#             formatted_link
         if self.link:
             if self.title:
                 return '%s "%s"' % (self.link, self.title.replace('"', ''))
@@ -407,7 +415,7 @@ class WordPressPost(WordPressItem):
             enlink = match_obj.group(1)
             item = WordPressItem.createFromEvernote(enlink, en_wrapper)
             self._ref_wp_items.add(item)
-            link = item.formatContentLink()
+            link = item.format_content_link() #context=match_obj)
             if link:
                 return link
             else:

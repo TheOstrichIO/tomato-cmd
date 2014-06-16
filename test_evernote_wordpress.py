@@ -171,6 +171,26 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         self.assertIsInstance(wp_post.project, WordPressPost)
         self.assertEqual(583, wp_post.project.id)
         self.assertSetEqual(set(), wp_post._ref_wp_items)
+    
+    def test_evernote_link_processor_parser(self):
+        note = test_notes['project-note-noid']
+        wp_post = WordPressItem.createFromEvernote(note.guid, self.evernote)
+        self.assertIsInstance(wp_post, WordPressPost)
+        self.assertEqual('post', wp_post.post_type)
+        self.assertEqual('markdown', wp_post.content_format)
+        self.assertEqual('New project note', wp_post.title)
+        self.assertIsNone(wp_post.id)
+        self.assertIsNone(wp_post.slug)
+        self.assertEqual('new-project-note',
+                         wp_post.get_slug())
+        self.assertIsNone(wp_post.thumbnail)
+        # TODO: refactor code to make this work.
+        #self.assertEqual("Nothing to see here 583.\n", wp_post.content)
+        self.assertIsInstance(wp_post.project, WordPressPost)
+        self.assertEqual(583, wp_post.project.id)
+        self.assertSetEqual(
+          set((WordPressItem._cache['abcd1234-aaaa-0000-ffff-abcd1234abcd'],)),
+          wp_post._ref_wp_items)
 
 class TestNoteMetadataAttrMatching(unittest.TestCase):
     

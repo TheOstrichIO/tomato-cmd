@@ -14,5 +14,5 @@ title=New project note
 <div>
 <hr/></div>
 <br/>
-<div>Nothing to see here.</div>
+<div>Nothing to see here <a href="evernote:///view/123/s123/abcd1234-aaaa-0000-ffff-abcd1234abcd/abcd1234-aaaa-0000-ffff-abcd1234abcd/" style="color: rgb(105, 170, 53);">{{Project :ID}}</a>.</div>
 </en-note>
