@@ -10,6 +10,7 @@ import re
 #import wordpress_xmlrpc
 from wordpress_xmlrpc import Client #, WordPressPost
 from wordpress_xmlrpc import WordPressPost as XmlRpcPost
+from wordpress_xmlrpc import WordPressPage as XmlRpcPage
 from wordpress_xmlrpc.compat import xmlrpc_client
 #from wordpress_xmlrpc.methods.posts import GetPosts, NewPost
 #from wordpress_xmlrpc.methods.users import GetUserInfo
@@ -57,10 +58,11 @@ class WordPressItem(object):
         if guid in cls._cache:
             return cls._cache[guid]
         # not cached - parse and cache result
-        if isinstance(note, str):
+        if isinstance(note, basestring):
             assert(en_wrapper)
             note = en_wrapper.getNote(guid)
         parsed_item = cls()
+        parsed_item._underlying_en_note = note
         parsed_item.initFromEvernote(note)
         # Get item specialization
         for subclass in cls._specializations:
@@ -72,7 +74,7 @@ class WordPressItem(object):
         #  (put partial parsing in cache for recursive link processing!)
         cls._cache[guid] = parsed_item
         parsed_item._process_en_note_title(note.title)
-        parsed_item._process_en_note_resources(note.resources)
+        parsed_item._process_en_note_resources(note.resources, note.title)
         parsed_item.processLinks(en_wrapper)
         return parsed_item
             
@@ -226,7 +228,7 @@ class WordPressItem(object):
         """
         pass
     
-    def _process_en_note_resources(self, note_resources):
+    def _process_en_note_resources(self, note_resources, note_title=''):
         """Optionally override in subclass to do something with Evernote
         resources, when initialized from Evernote note.
         
@@ -294,9 +296,10 @@ class WordPressImageAttachment(WordPressItem):
     def _process_en_note_title(self, note_title):
         self.filename = note_title.split()[0]
     
-    def _process_en_note_resources(self, note_resources):
-        if 0 == len(note_resources):
-            raise RuntimeError('Image note has no attached resources')
+    def _process_en_note_resources(self, note_resources, note_title=''):
+        if not note_resources or 0 == len(note_resources):
+            raise RuntimeError('Image note (%s) has no attached resources' %
+                               (note_title))
         resource = note_resources[0]
         if 1 < len(note_resources):
             logger.warning('Image note has too many attached resources (%d). '
