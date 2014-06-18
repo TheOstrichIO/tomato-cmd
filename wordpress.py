@@ -10,7 +10,7 @@ import re
 #import wordpress_xmlrpc
 from wordpress_xmlrpc import Client #, WordPressPost
 from wordpress_xmlrpc import WordPressPost as XmlRpcPost
-from wordpress_xmlrpc import WordPressPage as XmlRpcPage
+#from wordpress_xmlrpc import WordPressPage as XmlRpcPage
 from wordpress_xmlrpc.compat import xmlrpc_client
 #from wordpress_xmlrpc.methods.posts import GetPosts, NewPost
 #from wordpress_xmlrpc.methods.users import GetUserInfo
@@ -237,25 +237,28 @@ class WordPressItem(object):
         
         :param note_resources: List of resources attached to the note
         :type note_resources: list
+        :param note_title: Note title for logging purposes
+        :type note_title: string
         """
         pass
     
-    def publishItem(self, wp_wrapper):
-        """Publish the WordPress item represented by this instance.
+    @property
+    def ref_items(self):
+        for item in ([self.thumbnail, self.parent, self.project] +
+                     list(self._ref_wp_items)):
+            if item and isinstance(item, WordPressItem):
+                yield item
+    
+    def post_stub(self, wp_wrapper):
+        """Post this WordPress item as a stub item, and update the ID.
         
         Uses specified `wp_wrapper` to interact with a WordPress site.
-        If instance has an ID, will try to update existing item with this ID.
-        Otherwise, will create a new item and update relevant
-        fields (like ID, link) on the instance.
         
-        @raise RuntimeError: In case referenced WordPress items are missing
-                                required fields (IDs / links or images etc.).
-        @type wp_wrapper: WordPressApiWrapper
+        :type wp_wrapper: WordPressApiWrapper
         """
-        if self.id is None:
-            self.publish_new(wp_wrapper)
-        else:
-            self.update_existing(wp_wrapper)
+        if self.id:
+            raise RuntimeError('WordPress item has ID set.')
+        self.upload_new_stub(wp_wrapper)
 
 class WordPressImageAttachment(WordPressItem):
     
@@ -330,8 +333,24 @@ class WordPressImageAttachment(WordPressItem):
         """Image attachment mimetype."""
         return self._image_mime
     
-    def publish_new(self, wp_wrapper):
-        """Create new image attachment based on this instance.
+    def upload_new_stub(self, wp_wrapper):
+        """Post this WordPress image as a stub item, and update the ID.
+        
+        Uses specified `wp_wrapper` to interact with a WordPress site.
+        Image item stub includes actual image, but not parent attachment.
+        
+        :type wp_wrapper: WordPressApiWrapper
+        """
+        data = {
+            'name': self.filename,
+            'type': self.mimetype,
+            'bits': xmlrpc_client.Binary(self.image_data),
+            }
+        response = wp_wrapper.upload_file(data)
+        self.id = response.get('id')
+    
+    def update_item(self, wp_wrapper):
+        """Update image attachment based on this instance.
         
         Use `wp_wrapper` to publish.
         
@@ -340,17 +359,8 @@ class WordPressImageAttachment(WordPressItem):
         @raise RuntimeError: In case referenced WordPress items are missing
                              required fields (IDs / links or images etc.).
         """
-        if self.id is not None:
-            raise RuntimeError('Cannot publish new image when ID exists')
-        #if not self.isFullyProcessed():
-        #    raise RuntimeError('Image instance not fully processed')
-        data = {
-            'name': self.filename,
-            'type': self.mimetype,
-            'bits': xmlrpc_client.Binary(self.image_data),
-            }
-        response = wp_wrapper.upload_file(data)
-        self.id = response.get('id')
+        if self.id is None:
+            raise RuntimeError('Cannot update image without ID set.')
         # The UploadFile method doesn't support setting parent ID,
         # so we need to get the uploaded image as post item and edit it.
         # TODO: refactor to parent property
@@ -386,7 +396,6 @@ class WordPressPost(WordPressItem):
         self.content = ''
         self.tags = list()
         self.categories = list()
-        self._fully_processed_flag = False
     
     def get_slug(self):
         if self.slug:
@@ -394,9 +403,13 @@ class WordPressPost(WordPressItem):
         elif self.title:
             return slugify.slugify(self.title)
     
-    def isFullyProcessed(self):
-        "True if all links and referenced items are valid"
-        return self._fully_processed_flag
+    @property
+    def is_postable(self):
+        """Return True if this item can be posted to a WordPress site."""
+        for ref_item in self.ref_items:
+            if ref_item.id is None:
+                return False
+        return True
     
     def format_content_link(self, context=None):
         """Return a formatted link to be used in post content referring to
@@ -405,8 +418,9 @@ class WordPressPost(WordPressItem):
         If specified, `context` contains the original href element used,
         to allow custom processing.
         """
-#         if self.id:
-#             formatted_link
+        if self.id:
+            # TODO: title & context for anchor type link with text
+            return '[post id="%d"]' % (self.id)
         if self.link:
             if self.title:
                 return '%s "%s"' % (self.link, self.title.replace('"', ''))
@@ -423,9 +437,7 @@ class WordPressPost(WordPressItem):
                 return link
             else:
                 logger.warn('Could not format content link for "%s"', item)
-                self._fully_processed_flag = False
                 return match_obj.group(0)
-        self._fully_processed_flag = True
         # TODO: refactor fields processing such that the fields themselves
         #       define their processing (instead of hardcoding here)
         # parse thumbnail image link
@@ -436,11 +448,6 @@ class WordPressPost(WordPressItem):
         if self.thumbnail:
             if not isinstance(self.thumbnail, WordPressImageAttachment):
                 logger.warning('Thumbnail is not a WordPress image item')
-                self._fully_processed_flag = False
-            elif not self.thumbnail.id:
-                self._fully_processed_flag = False
-#             if isinstance(self.thumbnail, WordPressImageAttachment):
-#                 self._ref_wp_items.add(self.thumbnail)
         
         if self.project and EvernoteApiWrapper.is_evernote_url(self.project):
             self.project = WordPressItem.createFromEvernote(self.project,
@@ -448,11 +455,6 @@ class WordPressPost(WordPressItem):
         if self.project:
             if not isinstance(self.project, WordPressPost):
                 logger.warning('Project is not a WordPress post item')
-                self._fully_processed_flag = False
-            elif not self.project.id:
-                self._fully_processed_flag = False
-#             if isinstance(self.project, WordPressPost):
-#                 self._ref_wp_items.add(self.project)
         
         # replace all <evernote:///...> links within content
         # TODO: maybe match entire Markdown link?
@@ -469,8 +471,8 @@ class WordPressPost(WordPressItem):
         # TODO: bring categories, tags, author, thumbnail, content
         # TODO: bring hemingway-grade and content format custom fields
     
-    def asXmlRpcPost(self):
-        """Returns XML RPC WordPressPost item representation of this instance
+    def as_xml_rpc_post(self):
+        """Return XML RPC WordPressPost item representation of this instance
         @rtype: wordpress_xmlrpc.WordPressPost
         """
         def add_custom_field(post, key, val):
@@ -490,7 +492,7 @@ class WordPressPost(WordPressItem):
         post.slug = self.get_slug()
         post.post_status = self.post_status
         # TODO: author?
-        if self.thumbnail:
+        if self.thumbnail and hasattr(self.thumbnail, 'id'):
             post.thumbnail = self.thumbnail.id
         if self.tags:
             add_terms(post, 'post_tag', self.tags)
@@ -498,48 +500,51 @@ class WordPressPost(WordPressItem):
             add_terms(post, 'category', self.categories)
         if self.content_format:
             add_custom_field(post, 'content_format', self.content_format)
-        if self.project:
+        if self.project and hasattr(self.project, 'id'):
             add_custom_field(post, 'project', self.project.id)
         if self.hemingway_grade:
             add_custom_field(post, 'hemingwayapp-grade', self.hemingway_grade)
         return post
     
-    def publish_new(self, wp_wrapper):
-        """Create new post based on this instance.
-        Uses `wp_wrapper` to publish.
+    def as_xml_rpc_page(self):
+        """Return XML RPC WordPressPage item representation of this instance
+        @rtype: wordpress_xmlrpc.WordPressPost
+        """
+        page = self.as_xml_rpc_post()
+        if (self.parent and hasattr(self.parent, 'id') and
+            self.parent.id is not None):
+            page.parent = self.parent.id
+        return page
+    
+    def upload_new_stub(self, wp_wrapper):
+        """Post this WordPress post as a stub item, and update the ID.
+        
+        Uses specified `wp_wrapper` to interact with a WordPress site.
+        
+        :type wp_wrapper: WordPressApiWrapper
+        """
+        stub_post = XmlRpcPost()
+        stub_post.title = self.title
+        self.id = wp_wrapper.new_post(stub_post)
+    
+    def update_item(self, wp_wrapper):
+        """Update post based on this instance.
+        
+        Use `wp_wrapper` to publish.
         
         @type wp_wrapper: WordPressApiWrapper
         @requires: Target note has no ID set.
         @raise RuntimeError: In case referenced WordPress items are missing
-                                required fields (IDs / links or images etc.).
-        """
-        if self.id is not None:
-            raise RuntimeError('Cannot publish new post when ID exists')
-        if not self.isFullyProcessed():
-            raise RuntimeError('Post instance not fully processed')
-        if 'post' == self.post_type:
-            xmlrpc_post = self.asXmlRpcPost()
-        elif 'page' == self.post_type:
-            xmlrpc_post = self.asXmlRpcPage()
-        self.id = wp_wrapper.new_post(xmlrpc_post)
-    
-    def update_existing(self, wp_wrapper):
-        """Update existing post based on this instance.
-        Uses `wp_wrapper` to publish.
-        
-        @type wp_wrapper: WordPressApiWrapper
-        @requires: Target note has ID set.
-        @raise RuntimeError: In case referenced WordPress items are missing
-                                required fields (IDs / links or images etc.).
+                             required fields (IDs / links or images etc.).
         """
         if self.id is None:
             raise RuntimeError('Cannot update post with no ID')
-        if not self.isFullyProcessed():
+        if not self.is_postable:
             raise RuntimeError('Post instance not fully processed')
         if 'post' == self.post_type:
-            xmlrpc_post = self.asXmlRpcPost()
+            xmlrpc_post = self.as_xml_rpc_post()
         elif 'page' == self.post_type:
-            xmlrpc_post = self.asXmlRpcPage()
+            xmlrpc_post = self.as_xml_rpc_page()
         if not wp_wrapper.edit_post(xmlrpc_post):
             raise RuntimeError('Failed updating WordPress post')
 

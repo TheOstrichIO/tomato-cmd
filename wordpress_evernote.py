@@ -54,6 +54,24 @@ class EvernoteWordpressAdaptor(object):
         self.evernote = en_wrapper
         self.wordpress = wp_wrapper
     
+    def create_wordpress_stub_from_note(self, wp_item, en_note):
+        """Create WordPress item stub from item with no ID.
+        
+        The purpose is the create an ID without publishing all related items.
+        The created ID will be updated in the Evernote note.
+        The item will be posted as a draft in WordPress.
+        
+        :param `note_link`: Evernote note link string for
+                            note with item to publish.
+        """
+        if not wp_item.id:
+            # New WordPress item
+            # Post as stub in order to get ID
+            wp_item.post_stub(self.wordpress)
+            assert(wp_item.id)
+            # Update ID in note
+            self.update_note_metdata(en_note, {'id': str(wp_item.id), })
+    
     def post_to_wordpress_from_note(self, note_link):
         """Create WordPress item from Evernote note,
         and publish it to a WordPress blog.
@@ -74,7 +92,11 @@ class EvernoteWordpressAdaptor(object):
         #: :type wp_post: WordPressItem
         wp_item = WordPressItem.createFromEvernote(en_note, self.evernote)
         # Post the item
-        wp_item.publishItem(self.wordpress)
+        self.create_wordpress_stub_from_note(wp_item, en_note)
+        for ref_wp_item in wp_item.ref_items:
+            self.create_wordpress_stub_from_note(
+                ref_wp_item, ref_wp_item._underlying_en_note)
+        wp_item.update_item(self.wordpress)
         # Update note metadata from published item (e.g. ID for new item)
         self.update_note_metadata_from_wordpress_post(en_note, wp_item)
     
@@ -85,6 +107,11 @@ class EvernoteWordpressAdaptor(object):
         """
         for _, note in self.evernote.get_notes_by_query(query):
             logger.info('Posting note "%s" (GUID %s)', note.title, note.guid)
+            try:
+                self.post_to_wordpress_from_note(note.guid)
+            except RuntimeError as ex:
+                logger.exception('Failed posting note "%s" (GUID %s)',
+                                 note.title, note.guid)
     
     def detach(self, query):
         """Detach sync between WordPress site and notes matched by `query`.
