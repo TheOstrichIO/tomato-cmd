@@ -17,6 +17,6 @@ Line with image tag pointing to image-note as Evernote linked note: [caption id=
 
 Line with Evernote TODO checkbox followed by some text (&#x2751;do this better). Parser should warn.
 
-And here's a [link to an existing post](http://www.ostricher.com/2014/04/another-test-note "Another test note")!
+And here's a [link to an existing post]([post id="303"])!
 
 Finish with one [link with a tag](http://www.ostricher.com/), and [one link with no a tag but with title](http://www.ostricher.com/ "Ostricher.com site"), followed by some text.

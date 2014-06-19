@@ -260,18 +260,18 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
         note = test_notes['project-note-with-id-nothumb']
         wp_post = WordPressItem.createFromEvernote(note.guid, self.evernote)
         self.assertIsInstance(wp_post, WordPressPost)
-        wp_post.publishItem(self.wordpress)
+        wp_post.update_item(self.wordpress)
         self.assertTrue(self.wordpress.edit_post.called)
     
     def test_publish_project_note_existing_project_index(self):
         self.wordpress.new_post = MagicMock(return_value=660)
+        self.wordpress.edit_post = MagicMock(return_value=True)
         note = test_notes['project-note-noid']
         wp_post = WordPressItem.createFromEvernote(note.guid, self.evernote)
         self.assertIsInstance(wp_post, WordPressPost)
         self.assertIsNone(wp_post.id)
-        wp_post.publishItem(self.wordpress)
+        self.adaptor.post_to_wordpress_from_note(note.guid)
         self.assertEqual(660, wp_post.id)
-        self.adaptor.update_note_metadata_from_wordpress_post(note, wp_post)
         expected_note = EvernoteNote(
             guid='abcd1234-aaaa-2048-ffff-abcd1234abcd',
             title='New project note',
@@ -280,6 +280,7 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
         self.assertListEqual(expected_note.content.split('\n'),
                              note.content.split('\n'))
         self.evernote.updateNote.assert_called_once_with(note)
+        self.assertTrue(self.wordpress.edit_post.called)
     
     def test_upload_new_image_existing_parent(self):
         self.wordpress.upload_file = MagicMock(return_value={'id': 792,})
