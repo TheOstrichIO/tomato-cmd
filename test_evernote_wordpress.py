@@ -44,7 +44,7 @@ test_notes = {
     'image-with-id':
     EvernoteNote(
         guid='abcd1234-1234-abcd-1234-abcd1234abcd',
-        title='test.png <277>',
+        title='test.png',
         notebookGuid='abcd1234-5678-cdef-7890-abcd1234abcd',
         content='image-with-id.xml',
         resources=[MagicMock()]),
@@ -117,11 +117,12 @@ class TestEvernoteWordPressParser(unittest.TestCase):
     
     def test_evernote_image_parser(self):
         note = test_notes['image-with-id']
-        wp_image = WordPressItem.createFromEvernote(note.guid, self.evernote)
+        #wp_image = WordPressItem.createFromEvernote(note.guid, self.evernote)
+        wp_image = self.adaptor.wp_item_from_note(note.guid)
         self.assertIsInstance(wp_image, WordPressImageAttachment)
         self.assertEqual(277, wp_image.id)
         self.assertEqual('Test image', wp_image.title)
-        self.assertEqual('test.png', wp_image.filename)
+        self.assertEqual('test.png', wp_image._filename)
         self.assertEqual('http://www.ostricher.com/images/test.png',
                          wp_image.link)
         self.assertEqual('Image caption', wp_image.caption)
@@ -134,7 +135,7 @@ class TestEvernoteWordPressParser(unittest.TestCase):
     
     def test_evernote_post_parser(self):
         note = test_notes['note-with-id-thumbnail-attached-image-body-link']
-        wp_post = WordPressItem.createFromEvernote(note.guid, self.evernote)
+        wp_post = self.adaptor.wp_item_from_note(note.guid)
         self.assertIsInstance(wp_post, WordPressPost)
         self.assertEqual('post', wp_post.post_type)
         self.assertEqual('markdown', wp_post.content_format)

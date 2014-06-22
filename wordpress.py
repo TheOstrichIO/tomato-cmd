@@ -24,28 +24,107 @@ from my_evernote import EvernoteApiWrapper, note_link_re
 
 logger = common.logger.getChild('wordpress')
 
-class MetaWordPressItem(type):
-    def __new__(cls, clsname, bases, dct):
-        newclass = super(MetaWordPressItem, cls).__new__(cls, clsname,
-                                                         bases, dct)
-        for base in bases:
-            if hasattr(base, 'register_specialization'):
-                base.register_specialization(newclass)
-        return newclass
+# class MetaWordPressItem(type):
+#     def __new__(cls, clsname, bases, dct):
+#         newclass = super(MetaWordPressItem, cls).__new__(cls, clsname,
+#                                                          bases, dct)
+#         for base in bases:
+#             if hasattr(base, 'register_specialization'):
+#                 base.register_specialization(newclass)
+#         return newclass
+
+class WordPressAttribute(object):
+    """WordPress item attribute."""
+    
+    @classmethod
+    def create(cls, attr_name, value):
+        """Attribute factory method.
+        
+        Return a WordPress item attribute, initialized with `value`.
+        """
+        return cls(value)
+    
+    def __init__(self, value):
+        """Initialize a basic WordPress attribute with plain string."""
+        assert(isinstance(value, basestring))
+        if '<auto>' == value:
+            self._value = None
+            self._auto = True
+        else:
+            if value and value.isdigit():
+                value = int(value)
+            self._value = value
+            self._auto = False
+    
+    def fget(self):
+        return self._value
+    
+    def fset(self, value):
+        self._value = value
+    
+    def fdel(self):
+        del self._value
+
+def wp_property(attr):
+    _attr = '_%s' % (attr)
+    __attr = '__%s' % (attr)
+    
+    def fget(obj):
+        if hasattr(obj, _attr) and isinstance(getattr(obj, _attr),
+                                               WordPressAttribute):
+            return getattr(obj, _attr).fget()
+        elif hasattr(obj, __attr):
+            return getattr(obj, __attr)
+    
+    def fset(obj, value):
+        if hasattr(obj, _attr) and isinstance(getattr(obj, _attr),
+                                               WordPressAttribute):
+            getattr(obj, _attr).fset(value)
+        else:
+            setattr(obj, __attr, value)
+    
+    def fdel(obj):
+        if hasattr(obj, _attr) and isinstance(getattr(obj, _attr),
+                                               WordPressAttribute):
+            getattr(obj, _attr).fdel()
+        else:
+            delattr(obj, __attr)
+        
+    
+    return property(fget, fset, fdel)
 
 class WordPressItem(object):
     """Generic WordPress item class.
     Can be any of the specified `specialization` that has this as base class.
     """
-    __metaclass__ = MetaWordPressItem
-    _specializations = list()
+#     __metaclass__ = MetaWordPressItem
+#     _specializations = list()
     _all_slots = set()
     _cache = dict()
     
-    @classmethod
-    def register_specialization(cls, subclass):
-        cls._specializations.append(subclass)
-        cls._all_slots.update(subclass._slots)
+    id = wp_property('id')
+    title = wp_property('title')
+    post_type = wp_property('post_type')
+    content_format = wp_property('content_format')
+    post_status = wp_property('post_status')
+    link = wp_property('link')
+    parent = wp_property('parent')
+    caption = wp_property('caption')
+    date_created = wp_property('date_created')
+    description = wp_property('description')
+    thumbnail = wp_property('thumbnail')
+    project = wp_property('project')
+    hemingway_grade = wp_property('hemingway_grade')
+    
+    def make_attribute(self, attr, value):
+        setattr(self, '_%s' % (attr), value)
+        if isinstance(value, WordPressAttribute):
+            value._wp_item = self
+    
+#     @classmethod
+#     def register_specialization(cls, subclass):
+#         cls._specializations.append(subclass)
+#         cls._all_slots.update(subclass._slots)
     
     @classmethod
     def createFromEvernote(cls, note_or_guid_or_enlink, en_wrapper=None):
@@ -65,7 +144,7 @@ class WordPressItem(object):
         parsed_item._underlying_en_note = note
         parsed_item.initFromEvernote(note)
         # Get item specialization
-        for subclass in cls._specializations:
+        for subclass in [WordPressImageAttachment, WordPressPost]:
             if subclass.isInstance(parsed_item):
                 # reinterpret cast
                 parsed_item.__class__ = subclass
@@ -86,8 +165,8 @@ class WordPressItem(object):
         return unicode(self).encode('utf-8')
     
     def __init__(self):
-        for slot in self._all_slots:
-            setattr(self, slot, None)
+        #for slot in self._all_slots:
+        #    setattr(self, slot, None)
         self.content = ''
         self.tags = list()
         self.categories = list()

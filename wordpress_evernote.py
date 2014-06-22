@@ -6,9 +6,10 @@ from xml.etree import ElementTree as ET
 
 import settings
 import common
-from wordpress import WordPressApiWrapper, WordPressPost
+from wordpress import WordPressApiWrapper, WordPressPost, WordPressAttribute
 from wordpress import WordPressItem, WordPressImageAttachment
 from my_evernote import EvernoteApiWrapper
+from __builtin__ import super
 
 wp_en_parser = argparse.ArgumentParser(
     description='WordPress <--> Evernote utilities')
@@ -23,6 +24,63 @@ logger = common.logger.getChild('wordpress-evernote')
 
 class NoteParserError(Exception):
     pass
+
+
+
+class WpEnAttribute(WordPressAttribute):
+    """WordPress attribute from Evernote note."""
+    
+    @classmethod
+    def create(cls, adaptor, attr_name, node):
+        """Attribute factory method.
+         
+        Return a WordPress item attribute for `attr_name`, initialized by
+        node at root `node`.
+        """
+        if attr_name in ('parent', 'thumbnail', 'project'):
+            return WpEnLinkAttribute(adaptor, node)
+        else:
+            return WordPressAttribute.create(attr_name, node.text)
+
+class WpEnLinkAttribute(WordPressAttribute):
+    
+    def __init__(self, adaptor, node):
+        """
+        :type adaptor: EvernoteApiWrapper
+        """
+        if '' != node.text:
+            raise NoteParserError('Link "%s" should not have text' %
+                                  (ET.tostring(node)))
+        if not (node.tail is None or '' == node.tail):
+            raise NoteParserError('Link "%s" should not have tail' %
+                                  (ET.tostring(node)))
+        if 1 != len(node):
+            raise NoteParserError('Link "%s" should have one child' %
+                                  (ET.tostring(node)))
+        a_node = node[0]
+        if 'a' != a_node.tag:
+            raise NoteParserError('Link "%s" should have one <a> child' %
+                                  (ET.tostring(node)))
+        if not (a_node.tail is None or '' == a_node.tail):
+            raise NoteParserError('Link "%s" should not have tail' %
+                                  (ET.tostring(a_node)))
+        self._href = a_node.get('href')
+        if not self._href:
+            raise NoteParserError('Link "%s" has no href' %
+                                  (ET.tostring(a_node)))
+        self._text = a_node.text
+        self._ref_item = None
+        self._adaptor = adaptor
+        super(WpEnLinkAttribute, self).__init__(self._href)
+    
+    def fget(self):
+        if EvernoteApiWrapper.is_evernote_url(self._href):
+            if self._ref_item is None:
+                self._ref_item = self._adaptor.wp_item_from_note(self._href)
+            return self._ref_item
+        else:
+            return self._href
+
 
 class EvernoteWordpressAdaptor(object):
     """Evernote-Wordpress Adaptor class."""
@@ -118,7 +176,9 @@ class EvernoteWordpressAdaptor(object):
                 # Not expecting deeper levels!
                 assert(0 == len(root))
                 child = ET.SubElement(target_node if target_node is not None
-                                      else get_active_node(), tag)
+                                      else ET.SubElement(get_active_node(),
+                                                         'p'),
+                                      tag)
                 if root.get('href'):
                     child.set('href', root.get('href'))
                 if text:
@@ -164,6 +224,62 @@ class EvernoteWordpressAdaptor(object):
         """
         self.evernote = en_wrapper
         self.wordpress = wp_wrapper
+        self.cache = dict()
+    
+    def wp_item_from_note(self, note_link):
+        """Factory builder of WordPressItem from Evernote note.
+        
+        :param note_link: Evernote note link string for note to create.
+        """
+        if isinstance(note_link, basestring):
+            guid = EvernoteApiWrapper.get_note_guid(note_link)
+        else:
+            note = note_link
+            guid = note.guid
+        # return parsed note from cache, if cached
+        if guid in self.cache:
+            return self.cache[guid]
+        # not cached - parse and cache result
+        if isinstance(note_link, basestring):
+            note = self.evernote.getNote(guid)
+        wp_item = WordPressItem()
+        wp_item._underlying_en_note = note
+        self.cache[guid] = wp_item
+        item_dom = self._parse_note_xml(note.content)
+        # Copy metadata fields to wp_item internal fields
+        for metadata in item_dom.findall(".//div[@id='metadata']/p"):
+            pos = metadata.text.find('=')
+            attr_name = metadata.text[:pos]
+            # Convert from Evernote attribute name to internal name if needed
+            name_mappings = {
+                'type': 'post_type',
+                'hemingwayapp-grade': 'hemingway_grade',
+            }
+            attr_name = name_mappings.get(attr_name, attr_name)
+            metadata.text = metadata.text[pos+1:]
+            wp_item.make_attribute(attr_name,
+                                   WpEnAttribute.create(self, attr_name,
+                                                        metadata))
+        # Determine post type and continue initialization accordingly
+        if wp_item.post_type in ('post', 'page'):
+            # Initialize as WordPress post
+            wp_item.__class__ = WordPressPost
+        else:
+            # Initialize as WordPress image attachment, and fetch image
+            wp_item.__class__ = WordPressImageAttachment
+            wp_item._filename = note.title
+            if not note.resources or 0 == len(note.resources):
+                raise NoteParserError('Note (%s) has no attached resources' %
+                                      (note.title))
+            resource = note.resources[0]
+            if 1 < len(note.resources):
+                logger.warning('Note has too many attached resources (%d). '
+                               'Choosing the first one, arbitrarily.',
+                               len(note.resources))
+            wp_item._image_data = resource.data.body
+            wp_item._image_mime = resource.mime
+            logger.debug('Got image with mimetype %s', wp_item.mimetype)
+        return wp_item
     
     def create_wordpress_stub_from_note(self, wp_item, en_note):
         """Create WordPress item stub from item with no ID.
@@ -194,7 +310,7 @@ class EvernoteWordpressAdaptor(object):
         @warning: Avoid posting the same note to different WordPress accounts,
                   as the IDs might be inconsistent!
         
-        :param `note_link`: Evernote note link string for
+        :param note_link: Evernote note link string for
                             note with item to publish.
         """
         # Get note from Evernote
