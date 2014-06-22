@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import re
 import argparse
+from xml.etree import ElementTree as ET
 
 import settings
 import common
@@ -19,6 +20,9 @@ subparsers = wp_en_parser.add_subparsers()
 logger = common.logger.getChild('wordpress-evernote')
 
 ###############################################################################
+
+class NoteParserError(Exception):
+    pass
 
 class EvernoteWordpressAdaptor(object):
     """Evernote-Wordpress Adaptor class."""
@@ -42,6 +46,113 @@ class EvernoteWordpressAdaptor(object):
                              re.IGNORECASE)
         cls._attr_matchers_cache[attr_name] = matcher
         return matcher
+    
+    @staticmethod
+    def _parse_xml_from_string(xml_string):
+        """Return parsed ElementTree from xml_string."""
+        parser = ET.XMLParser()
+        # Default XMLParser is not full XHTML, so it doesn't know about all
+        # valid XHTML entities (such as &nbsp;), so the following code is
+        # needed in order to allow these entities.
+        # (see: http://stackoverflow.com/questions/7237466 and
+        #       http://stackoverflow.com/questions/14744945 )
+        # Valid XML entities: quot, amp, apos, lt and gt.
+        parser.parser.UseForeignDTD(True)
+        parser.entity['nbsp'] = ' '
+        return ET.fromstring(xml_string, parser=parser)
+    
+    @staticmethod
+    def _parse_note_xml(note_content):
+        """Return a normalized Element tree root from note content XML string.
+        
+        A normalized WordPress item note is as follows:
+        1. Root `en-note` element.
+        1.1. `div` node with id `metadata`
+        1.1.1. A `p` node for every metadata attribute, of the form
+               `attr_key=attr_value`, where `attr_key` is a string and
+               `attr_value` may contain string or `a` node.
+        1.2. `div` node with id `content`
+        1.2.1. `p` node for every content paragraph, containing text and/or
+               `a` nodes.
+        """
+        root = EvernoteWordpressAdaptor._parse_xml_from_string(note_content)
+        norm_root = ET.Element('en-note')
+        norm_meta = ET.SubElement(norm_root, 'div', id='metadata')
+        norm_content = ET.SubElement(norm_root, 'div', id='content')
+        global stage
+        stage = 'meta'
+        def fix_text(text):
+            return text and text.strip('\n\r') or ''
+        def get_active_node():
+            if 'meta' == stage:
+                return norm_meta
+            elif 'content' == stage:
+                return norm_content
+            else:
+                raise NoteParserError('Invalid stage "%s"' % (stage))
+        def append_tail(text):
+            if text:
+                p = ET.SubElement(get_active_node(), 'p')
+                p.text = text
+        def parse_node(root, target_node=None):
+            tag = root.tag.lower()
+            text = fix_text(root.text)
+            tail = fix_text(root.tail)
+            if tag in ('hr', ):
+                # End of metadata section
+                assert(not root.text and (0 == len(root)))
+                global stage
+                if 'meta' == stage:
+                    stage = 'content'
+                else:
+                    raise NoteParserError('Invalid stage "%s"' % (stage))
+                append_tail(tail)
+            elif tag in ('div', 'p', 'br'):
+                p = ET.SubElement(get_active_node(), 'p')
+                if text:
+                    p.text = text
+                for e in root:
+                    parse_node(e, p)
+                append_tail(tail)
+            elif tag in ('a', 'span', 'en-todo', 'en-media'):
+                # Not expecting deeper levels!
+                assert(0 == len(root))
+                child = ET.SubElement(target_node if target_node is not None
+                                      else get_active_node(), tag)
+                if root.get('href'):
+                    child.set('href', root.get('href'))
+                if text:
+                    child.text = text
+                if tail:
+                    child.tail = tail
+            else:
+                # Unexpected tag?
+                logger.warn('Unexpected tag "%s"', root)
+        # Parse all sub elements of main en-note
+        for e in root:
+            parse_node(e)
+        # Clean up redundant empty p tags in normalized tree
+        for top_level_div in norm_root:
+            del_list = list()
+            trailing_empty_list = list()
+            prev_empty = True # initialized to True to remove prefix empty p's
+            for p in top_level_div:
+                # sanity - top level divs should contain only p elements
+                assert('p' == p.tag)
+                assert(not p.tail)
+                if (p.text or 0 < len(p)):
+                    prev_empty = False
+                    trailing_empty_list = list()
+                else:
+                    # Empty p - only one is allowed in between non-empty p's
+                    if prev_empty:
+                        del_list.append(p)
+                    else:
+                        trailing_empty_list.append(p)
+                    prev_empty = True
+            for p in del_list + trailing_empty_list:
+                top_level_div.remove(p)
+        return norm_root
     
     def __init__(self, en_wrapper, wp_wrapper):
         """Initialize Adaptor instance with API wrapper objects.
@@ -109,7 +220,7 @@ class EvernoteWordpressAdaptor(object):
             logger.info('Posting note "%s" (GUID %s)', note.title, note.guid)
             try:
                 self.post_to_wordpress_from_note(note.guid)
-            except RuntimeError as ex:
+            except RuntimeError:
                 logger.exception('Failed posting note "%s" (GUID %s)',
                                  note.title, note.guid)
     

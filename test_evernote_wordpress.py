@@ -87,6 +87,33 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         wordpress.logger = Mock()
         self.evernote = EvernoteApiWrapper(token='123')
         self.evernote.getNote = MagicMock(side_effect=mocked_get_note)
+        self.adaptor = EvernoteWordpressAdaptor(self.evernote, None)
+    
+    def assertElementTreeEqual(self, root1, root2, msg=None):
+        """Helper method to compare ElementTree objects."""
+        def norm_text(text):
+            if text is None:
+                return ''
+            return text.strip('\n\r')
+        self.assertEqual(root1.tag, root2.tag, msg)
+        self.assertEqual(norm_text(root1.text), norm_text(root2.text), msg)
+        self.assertEqual(norm_text(root1.tail), norm_text(root2.tail), msg)
+        self.assertDictEqual(root1.attrib, root2.attrib, msg)
+        self.assertEqual(len(root1), len(root2), msg)
+        for e1, e2 in zip(root1, root2):
+            self.assertElementTreeEqual(e1, e2, msg)
+    
+    def test_evernote_wpitem_normalize(self):
+        note = test_notes['note-with-id-thumbnail-attached-image-body-link']
+        normalized_tree = self.adaptor._parse_note_xml(note.content)
+        expected_note = EvernoteNote(
+            guid=note.guid,
+            title=note.title,
+            notebookGuid=note.notebookGuid,
+            content='normalized-note-1.xml')
+        expected_tree = self.adaptor._parse_xml_from_string(
+            expected_note.content)
+        self.assertElementTreeEqual(expected_tree, normalized_tree)
     
     def test_evernote_image_parser(self):
         note = test_notes['image-with-id']

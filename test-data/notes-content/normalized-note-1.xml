@@ -2,38 +2,38 @@
 <!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
 <en-note>
 <div id="metadata">
-<div>id=544</div>
-<div>type=post</div>
-<div>content_format=markdown</div>
-<div>title=Test Post with Title out of Div and = Symbol</div>
-<div>slug=&lt;auto&gt;</div>
-<div>categories=Meta</div>
-<div>tags="Multiword, Tag",test-tag</div>
-<div>thumbnail=<a href="evernote:///view/123/s123/abcd1234-1234-abcd-1234-abcd1234abcd/abcd1234-1234-abcd-1234-abcd1234abcd/">test-thumb.png</a></div>
-<div>hemingwayapp-grade=8</div>
+<p>id=544</p>
+<p>type=post</p>
+<p>content_format=markdown</p>
+<p>title=Test Post with Title out of Div and = Symbol</p>
+<p>slug=&lt;auto&gt;</p>
+<p>categories=Meta</p>
+<p>tags="Multiword, Tag",test-tag</p>
+<p>thumbnail=<a href="evernote:///view/123/s123/abcd1234-1234-abcd-1234-abcd1234abcd/abcd1234-1234-abcd-1234-abcd1234abcd/">test-thumb.png</a></p>
+<p>hemingwayapp-grade=8</p>
 </div>
 <div id="content">
-<div>First line of content.<br/></div>
-<div><br/></div>
-<div>Some content between br-divs, before closing of div that started before meta<br/></div>
-<div><br/></div>
-<div>A markdown list with no line breaks between items:</div>
-<div><br/></div>
-<div>1. List item.</div>
-<div>2. List item and &quot;&amp;&quot; HTML escaping test.</div>
-<div>3. List item that continues on</div>
-<div>   following line with indentation.</div>
-<div><br/></div>
-<div>First line after markdown list, followed by line that contains only a "comment"</div>
-<div><br/></div>
-<div>&lt;!--more--&gt;</div>
-<div><br/></div>
-<div>Line with image tag pointing to image-note as Evernote linked note: <a href="evernote:///view/123/s123/abcd1234-1234-abcd-1234-abcd1234abcd/abcd1234-1234-abcd-1234-abcd1234abcd/">test-thumb.png</a></div>
-<div><br/></div>
-<div>Line with Evernote TODO checkbox followed by some text (<en-todo/>do this better). Parser should warn.</div>
-<div><br/></div>
-<div>And here's a [link to an existing post](<a href="evernote:///view/123/s123/abcd1234-5678-0000-7890-abcd1234abcd/abcd1234-5678-0000-7890-abcd1234abcd/">Another test note</a>)!</div>
-<div><br/></div>
-<div>Finish with one [link with a tag](<a href="http://www.ostricher.com/">http://www.ostricher.com/</a>), and [one link with no a tag but with title](http://www.ostricher.com/ "Ostricher.com site"), followed by some text.</div>
+<p>First line of content.</p>
+<p></p>
+<p>Some content between br-divs, before closing of div that started before meta</p>
+<p></p>
+<p>A markdown list with no line breaks between items:</p>
+<p></p>
+<p>1. List item.</p>
+<p>2. List item and &quot;&amp;&quot; HTML escaping test.</p>
+<p>3. List item that continues on</p>
+<p>   following line with indentation.</p>
+<p></p>
+<p>First line after markdown list, followed by line that contains only a "comment"</p>
+<p></p>
+<p>&lt;!--more--&gt;</p>
+<p></p>
+<p>Line with image tag pointing to image-note as Evernote linked note: <a href="evernote:///view/123/s123/abcd1234-1234-abcd-1234-abcd1234abcd/abcd1234-1234-abcd-1234-abcd1234abcd/">test-thumb.png</a></p>
+<p></p>
+<p>Line with Evernote TODO checkbox followed by some text (<en-todo/>do this better). Parser should warn.</p>
+<p></p>
+<p>And here's a [link to an existing post](<a href="evernote:///view/123/s123/abcd1234-5678-0000-7890-abcd1234abcd/abcd1234-5678-0000-7890-abcd1234abcd/">Another test note</a>)!</p>
+<p></p>
+<p>Finish with one [link with a tag](<a href="http://www.ostricher.com/">http://www.ostricher.com/</a>), and [one link with no a tag but with title](http://www.ostricher.com/ "Ostricher.com site"), followed by some text.</p>
 </div>
 </en-note>
