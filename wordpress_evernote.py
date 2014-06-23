@@ -257,9 +257,9 @@ class EvernoteWordpressAdaptor(object):
             }
             attr_name = name_mappings.get(attr_name, attr_name)
             metadata.text = metadata.text[pos+1:]
-            wp_item.make_attribute(attr_name,
-                                   WpEnAttribute.create(self, attr_name,
-                                                        metadata))
+            wp_item.set_wp_attribute(attr_name,
+                                     WpEnAttribute.create(self, attr_name,
+                                                          metadata))
         # Determine post type and continue initialization accordingly
         if wp_item.post_type in ('post', 'page'):
             # Initialize as WordPress post

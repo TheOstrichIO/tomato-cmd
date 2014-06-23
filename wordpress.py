@@ -66,30 +66,52 @@ class WordPressAttribute(object):
         del self._value
 
 def wp_property(attr):
-    _attr = '_%s' % (attr)
-    __attr = '__%s' % (attr)
+    """Return a WordPress property.
+    
+    Initialize the property with WordPressAttribute wrapper functions,
+    to allow WordPressAttribute semnatics on the attribute instances,
+    once they are initialized with such instances.
+    """
     
     def fget(obj):
-        if hasattr(obj, _attr) and isinstance(getattr(obj, _attr),
-                                               WordPressAttribute):
-            return getattr(obj, _attr).fget()
-        elif hasattr(obj, __attr):
-            return getattr(obj, __attr)
+        """Return a WordPress attribute value.
+        
+        If the attribute was set to be a WordPressAttribute subclass,
+        return the result of calling `fget()` on the attribute instance.
+        Otherwise, simply return the attribute verbatim.
+        
+        :type obj: WordPressItem
+        """
+        if isinstance(obj._wp_attrs.get(attr), WordPressAttribute):
+            return obj._wp_attrs[attr].fget()
+        else:
+            return obj._wp_attrs.get(attr)
     
     def fset(obj, value):
-        if hasattr(obj, _attr) and isinstance(getattr(obj, _attr),
-                                               WordPressAttribute):
-            getattr(obj, _attr).fset(value)
+        """Set a WordPress attribute to `value`.
+        
+        If the attribute is already set to an instance of WordPressAttribute,
+        and value is also an instance of WordPressAttribute, then replace it,
+        but if value is not an instance of WordPressAttribute, then pass
+        through the value to the `fset()` method of the attribute instance.
+        """
+        if isinstance(value, WordPressAttribute):
+            obj._wp_attrs[attr] = value
+        elif isinstance(obj._wp_attrs.get(attr), WordPressAttribute):
+            obj._wp_attrs[attr].fset(value)
         else:
-            setattr(obj, __attr, value)
+            obj._wp_attrs[attr] = value
     
     def fdel(obj):
-        if hasattr(obj, _attr) and isinstance(getattr(obj, _attr),
-                                               WordPressAttribute):
-            getattr(obj, _attr).fdel()
-        else:
-            delattr(obj, __attr)
+        """Delete a WordPress attribute.
         
+        If the attribute is an instance of WordPressAttribute,
+        first call the `fdel()` method on the attribute instance.
+        """
+        if isinstance(obj._wp_attrs.get(attr), WordPressAttribute):
+            obj._wp_attrs[attr].fdel()
+        if attr in obj._wp_attrs:
+            del obj._wp_attrs[attr]
     
     return property(fget, fset, fdel)
 
@@ -116,10 +138,12 @@ class WordPressItem(object):
     project = wp_property('project')
     hemingway_grade = wp_property('hemingway_grade')
     
-    def make_attribute(self, attr, value):
-        setattr(self, '_%s' % (attr), value)
+    def set_wp_attribute(self, attr, value):
+        """Set a WordPress attribute `attr` on this instance to `value`."""
         if isinstance(value, WordPressAttribute):
+            # keep reference to underlying WP item instance.
             value._wp_item = self
+        self._wp_attrs[attr] = value
     
 #     @classmethod
 #     def register_specialization(cls, subclass):
@@ -165,6 +189,8 @@ class WordPressItem(object):
         return unicode(self).encode('utf-8')
     
     def __init__(self):
+        # internal dictionary for WordPress attributes
+        self._wp_attrs = dict()
         #for slot in self._all_slots:
         #    setattr(self, slot, None)
         self.content = ''
