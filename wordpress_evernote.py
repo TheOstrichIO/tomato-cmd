@@ -354,14 +354,14 @@ class EvernoteWordpressAdaptor(object):
         self.cache[guid] = wp_item
         item_dom = self._parse_note_xml(note.content)
         # Copy metadata fields to wp_item internal fields
+        # Convert from Evernote attribute name to internal name if needed
+        name_mappings = {
+            'type': 'post_type',
+            'hemingwayapp-grade': 'hemingway_grade',
+        }
         for metadata in item_dom.findall(".//div[@id='metadata']/p"):
             pos = metadata.text.find('=')
             attr_name = metadata.text[:pos]
-            # Convert from Evernote attribute name to internal name if needed
-            name_mappings = {
-                'type': 'post_type',
-                'hemingwayapp-grade': 'hemingway_grade',
-            }
             attr_name = name_mappings.get(attr_name, attr_name)
             metadata.text = metadata.text[pos+1:]
             wp_item.set_wp_attribute(attr_name,
