@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import urllib2
+import re
 
 # WordPress API:
 #import wordpress_xmlrpc
@@ -291,13 +292,21 @@ class WordPressPost(WordPressItem):
                 return False
         return True
     
-    def markdown_ref(self, context=None):
+    def markdown_ref(self, context=''):
         """Return a formatted link to be used in post content referring to
         this item, in Markdown format.
         
-        If specified, `context` contains the original href element used,
+        If specified, `context` contains the original href element text,
         to allow custom processing.
         """
+        func = re.match('\{\{[^\{\}\:]+\:(?P<func>\w+)\}\}', context)
+        if func:
+            func_name = func.groupdict()['func'].lower()
+            if hasattr(self, func_name):
+                return str(getattr(self, func_name))
+            else:
+                raise RuntimeError('Invalid functional modifier "%s" on item '
+                                   '%s' % (func_name, self))
         if self.id:
             # TODO: title & context for anchor type link with text
             return '[post id="%d"]' % (self.id)

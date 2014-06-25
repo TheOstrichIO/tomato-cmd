@@ -206,8 +206,7 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         self.assertIsNone(wp_post.id)
         self.assertEqual('new-project-note', wp_post.slug)
         self.assertIsNone(wp_post.thumbnail)
-        # TODO: refactor code to make this work.
-        #self.assertEqual("Nothing to see here 583.\n", wp_post.content)
+        self.assertEqual("Nothing to see here 583.", wp_post.content)
         self.assertIsInstance(wp_post.project, WordPressPost)
         self.assertEqual(583, wp_post.project.id)
         self.assertSetEqual(
