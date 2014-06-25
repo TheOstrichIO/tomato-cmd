@@ -202,14 +202,17 @@ class WordPressImageAttachment(WordPressItem):
         self.filename = UrlParser(self.link).path_parts()[-1]
     
     def markdown_ref(self, context=None):
-        if self.link and self.id:
-            imtag = '<a href="%s"><img src="%s" class="wp-image-%d" %s/>' \
-                '</a>' % (self.link, self.link, self.id,
-                self.description and 'alt="%s" ' % (self.description) or '')
-            if self.caption:
-                return '[caption id="attachment_%d" align="alignnone"]%s %s' \
-                       '[/caption]' % (self.id, imtag, self.caption)
-            return imtag
+        if self.id:
+            return ('[gallery ids="%d" size="medium" columns="1" link="file"]'
+                    % (self.id))
+#         if self.link and self.id:
+#             imtag = '<a href="%s"><img src="%s" class="wp-image-%d" %s/>' \
+#                 '</a>' % (self.link, self.link, self.id,
+#                 self.description and 'alt="%s" ' % (self.description) or '')
+#             if self.caption:
+#                 return '[caption id="attachment_%d" align="alignnone"]%s %s' \
+#                        '[/caption]' % (self.id, imtag, self.caption)
+#             return imtag
     
     def image(self):
         "Returns a file-like object for reading image data."

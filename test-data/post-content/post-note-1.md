@@ -13,7 +13,7 @@ First line after markdown list, followed by line that contains only a "comment"
 
 <!--more-->
 
-Line with image tag pointing to image-note as Evernote linked note: [caption id="attachment_277" align="alignnone"]<a href="http://www.ostricher.com/images/test.png"><img src="http://www.ostricher.com/images/test.png" class="wp-image-277" alt="Description of test image" /></a> Image caption[/caption]
+Line with image tag pointing to image-note as Evernote linked note: [gallery ids="277" size="medium" columns="1" link="file"]
 
 Line with Evernote TODO checkbox followed by some text (&#x2751;do this better). Parser should warn.
 
