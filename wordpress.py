@@ -1,10 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-from xml.etree import ElementTree
-import csv
 import urllib2
-import re
 
 # WordPress API:
 #import wordpress_xmlrpc
@@ -20,33 +17,27 @@ import slugify
 
 import common
 from common import UrlParser
-from my_evernote import EvernoteApiWrapper, note_link_re
 
 logger = common.logger.getChild('wordpress')
-
-# class MetaWordPressItem(type):
-#     def __new__(cls, clsname, bases, dct):
-#         newclass = super(MetaWordPressItem, cls).__new__(cls, clsname,
-#                                                          bases, dct)
-#         for base in bases:
-#             if hasattr(base, 'register_specialization'):
-#                 base.register_specialization(newclass)
-#         return newclass
 
 class WordPressAttribute(object):
     """WordPress item attribute."""
     
     @classmethod
-    def create(cls, attr_name, value):
+    def create(cls, attr_name, value, wp_item):
         """Attribute factory method.
         
         Return a WordPress item attribute, initialized with `value`.
         """
-        return cls(value)
+        if attr_name in ('slug',):
+            return WordPressSlugAttribute(value, wp_item)
+        else:
+            return WordPressAttribute(value, wp_item)
     
-    def __init__(self, value):
+    def __init__(self, value, wp_item, *args, **kwargs):
         """Initialize a basic WordPress attribute with plain string."""
         assert(isinstance(value, basestring))
+        super(WordPressAttribute, self).__init__(*args, **kwargs)
         if '<auto>' == value:
             self._value = None
             self._auto = True
@@ -55,6 +46,7 @@ class WordPressAttribute(object):
                 value = int(value)
             self._value = value
             self._auto = False
+        self._wp_item = wp_item
     
     def fget(self):
         return self._value
@@ -65,7 +57,22 @@ class WordPressAttribute(object):
     def fdel(self):
         del self._value
 
-def wp_property(attr):
+class WordPressSlugAttribute(WordPressAttribute):
+    """WordPress item slug attribute."""
+    
+    def fget(self):
+        """Return slug string for item.
+        
+        If set to auto, and underlying item has title, then slugify the title.
+        Otherwise return the string value for this attribute.
+        """
+        if self._auto and self._wp_item.title:
+            return slugify.slugify(self._wp_item.title)
+        else:
+            return self._value
+
+
+def wp_property(attr, default=None):
     """Return a WordPress property.
     
     Initialize the property with WordPressAttribute wrapper functions,
@@ -85,7 +92,7 @@ def wp_property(attr):
         if isinstance(obj._wp_attrs.get(attr), WordPressAttribute):
             return obj._wp_attrs[attr].fget()
         else:
-            return obj._wp_attrs.get(attr)
+            return obj._wp_attrs.get(attr, default)
     
     def fset(obj, value):
         """Set a WordPress attribute to `value`.
@@ -119,20 +126,21 @@ class WordPressItem(object):
     """Generic WordPress item class.
     Can be any of the specified `specialization` that has this as base class.
     """
-#     __metaclass__ = MetaWordPressItem
-#     _specializations = list()
-    _all_slots = set()
-    _cache = dict()
-    
     id = wp_property('id')
     title = wp_property('title')
     post_type = wp_property('post_type')
     content_format = wp_property('content_format')
     post_status = wp_property('post_status')
+    categories = wp_property('categories', [])
+    tags = wp_property('tags', [])
+    slug = wp_property('slug')
+    author = wp_property('author')
+    content = wp_property('content')
     link = wp_property('link')
     parent = wp_property('parent')
     caption = wp_property('caption')
     date_created = wp_property('date_created')
+    date_modified = wp_property('date_modified')
     description = wp_property('description')
     thumbnail = wp_property('thumbnail')
     project = wp_property('project')
@@ -140,47 +148,8 @@ class WordPressItem(object):
     
     def set_wp_attribute(self, attr, value):
         """Set a WordPress attribute `attr` on this instance to `value`."""
-        if isinstance(value, WordPressAttribute):
-            # keep reference to underlying WP item instance.
-            value._wp_item = self
         self._wp_attrs[attr] = value
     
-#     @classmethod
-#     def register_specialization(cls, subclass):
-#         cls._specializations.append(subclass)
-#         cls._all_slots.update(subclass._slots)
-    
-    @classmethod
-    def createFromEvernote(cls, note_or_guid_or_enlink, en_wrapper=None):
-        note = note_or_guid_or_enlink
-        if isinstance(note, basestring):
-            guid = EvernoteApiWrapper.get_note_guid(note_or_guid_or_enlink)
-        else:
-            guid = note.guid
-        # return parsed note from cache, if cached
-        if guid in cls._cache:
-            return cls._cache[guid]
-        # not cached - parse and cache result
-        if isinstance(note, basestring):
-            assert(en_wrapper)
-            note = en_wrapper.getNote(guid)
-        parsed_item = cls()
-        parsed_item._underlying_en_note = note
-        parsed_item.initFromEvernote(note)
-        # Get item specialization
-        for subclass in [WordPressImageAttachment, WordPressPost]:
-            if subclass.isInstance(parsed_item):
-                # reinterpret cast
-                parsed_item.__class__ = subclass
-                break
-        # process content Evernote links
-        #  (put partial parsing in cache for recursive link processing!)
-        cls._cache[guid] = parsed_item
-        parsed_item._process_en_note_title(note.title)
-        parsed_item._process_en_note_resources(note.resources, note.title)
-        parsed_item.processLinks(en_wrapper)
-        return parsed_item
-            
     def __unicode__(self):
         return u'<%s: %s (%s)>' % (self.__class__.__name__,
                                    self.title, self.id)
@@ -191,161 +160,10 @@ class WordPressItem(object):
     def __init__(self):
         # internal dictionary for WordPress attributes
         self._wp_attrs = dict()
-        #for slot in self._all_slots:
-        #    setattr(self, slot, None)
-        self.content = ''
-        self.tags = list()
-        self.categories = list()
         # A set of WordPress items that the current item refers to
         #  (e.g. uses as images or links to other posts or pages)
         #  **not** including metadata fields (like thumbnail).
         self._ref_wp_items = set()
-    
-    def initFromEvernote(self, note):
-        def fix_text(text):
-            return text and text.strip('\n\r') or ''
-        def parse_link(atag):
-            # depends on content-format!
-            # in markdown - web-links should parse to the a.text,
-            #  and Evernote links should load the related WpItem
-            # luckily - I don't want to support other formats...
-            url = atag.attrib.get('href', '')
-            if EvernoteApiWrapper.is_evernote_url(url):
-                # surround in <> to allow secondary parsing
-                return '<%s>' % (url)
-            else:
-                return atag.text
-        def parse_div(div):
-            lines = [fix_text(div.text)]
-            div_tail = fix_text(div.tail)
-            for e in div:
-                tail = fix_text(e.tail)
-                if 'div' == e.tag:
-                    if div_tail:
-                        lines.append(div_tail)
-                    return lines
-                elif 'a' == e.tag:
-                    lines[-1] += parse_link(e) + tail
-                elif 'br' == e.tag:
-                    lines.append(tail)
-                elif e.tag in ('hr',):
-                    pass
-                elif 'en-todo' == e.tag:
-                    logger.warn('Post still contains TODOs!')
-                    lines[-1] += '&#x2751;' + tail
-                else:
-                    logger.warn('Don\'t know what to do with %s', repr(e))
-            if div_tail:
-                lines.append(div_tail)
-            return lines
-        def parse_list_value(value):
-            # Handle stringed lists of the form:
-            # in: 'val1,"val2", val3-hi, "val 4, quoted"'
-            # out: ['val1', 'val2', 'val3-hi', 'val 4, quoted'] (4 items)
-            return reduce(lambda x, y: x + y,
-                          list(csv.reader([value], skipinitialspace=True)))
-        def parse_line(line, in_meta):
-            if in_meta:
-                if line.startswith('#'):
-                    # skipping commented lines in meta section
-                    return
-                match = re.match('(?P<key>[\w\-]+)\=(?P<value>.*)', line)
-                if match:
-                    k, v = match.groupdict()['key'], match.groupdict()['value']
-                    if 'id' == k:
-                        self.id = v.isdigit() and int(v) or None
-                    elif 'type' == k:
-                        # TODO: refactor getting list of types
-                        assert(v in ('post', 'page', ))
-                        self.post_type = v
-                    elif 'content_format' == k:
-                        assert(v in ('markdown', 'html',))
-                        self.content_format = v
-                    elif 'title' == k:
-                        self.title = v
-                    elif 'slug' == k:
-                        self.slug = v <> '<auto>' and v or None
-                    elif 'categories' == k:
-                        self.categories = parse_list_value(v)
-                    elif 'tags' == k:
-                        self.tags = parse_list_value(v)
-                    elif 'thumbnail' == k:
-                        v = v.strip('<>')
-                        self.thumbnail = v
-                    elif 'hemingwayapp-grade' == k:
-                        self.hemingway_grade = v.isdigit() and int(v) or None
-                    elif 'link' == k:
-                        self.link = v <> '<auto>' and v or None
-                    elif 'parent' == k:
-                        v = v.strip('<>')
-                        assert(EvernoteApiWrapper.is_evernote_url(v))
-                        self.parent = v
-                    elif 'project' == k:
-                        # TODO: refactor field processing to something modular
-                        # e.g., don't hardcode custom fields here...
-                        v = v.strip('<>')
-                        assert(EvernoteApiWrapper.is_evernote_url(v))
-                        self.project = v
-                    elif 'caption' == k:
-                        self.caption = v
-                    elif 'date_created' == k:
-                        self.date_created = v <> '<auto>' and v or None
-                    elif 'description' == k:
-                        self.description = v
-                    else:
-                        logger.warn('Unknown key "%s" (had value "%s")', k, v)
-            else:
-                self.content += line + '\n'
-                if self.content.endswith('\n\n\n'):
-                    self.content = self.content[:-1]
-        ## Start here
-        # Parse Evernote note content using XMLParser
-        parser = ElementTree.XMLParser()
-        # Default XMLParser is not full XHTML, so it doesn't know about all
-        # valid XHTML entities (such as &nbsp;), so the following code is
-        # needed in order to allow these entities.
-        # (see: http://stackoverflow.com/questions/7237466 and
-        #       http://stackoverflow.com/questions/14744945 )
-        # Valid XML entities: quot, amp, apos, lt and gt.
-        parser.parser.UseForeignDTD(True)
-        parser.entity['nbsp'] = ' '
-        root = ElementTree.fromstring(note.content, parser=parser)
-        in_meta = True
-        for e in root.iter():
-            if 'hr' == e.tag:
-                in_meta = False
-            elif 'div' == e.tag:
-                for line in parse_div(e):
-                    parse_line(line, in_meta)
-            elif e.tag in ('en-note', 'en-media', 'en-todo', 'a', 'br'):
-                # en-note & en-media are not interesting
-                # a & br & en-todo are always parsed higher up
-                pass
-            else:
-                logger.warn('Unhandled tag "%s"', e)
-    
-    def _process_en_note_title(self, note_title):
-        """Optionally override in subclass to do something with Evernote note
-        title, when initializing item from Evernote.
-        
-        This is called from `create_from_evernote`,
-         after initializing the note.
-        """
-        pass
-    
-    def _process_en_note_resources(self, note_resources, note_title=''):
-        """Optionally override in subclass to do something with Evernote
-        resources, when initialized from Evernote note.
-        
-        This is called from `create_from_evernote`,
-         after initializing the note.
-        
-        :param note_resources: List of resources attached to the note
-        :type note_resources: list
-        :param note_title: Note title for logging purposes
-        :type note_title: string
-        """
-        pass
     
     @property
     def ref_items(self):
@@ -367,15 +185,6 @@ class WordPressItem(object):
 
 class WordPressImageAttachment(WordPressItem):
     
-    _slots = frozenset(('id', 'title', 'link', 'parent', 'caption',
-                        'date_created', 'description', 'filename'))
-    # what's with alt?!
-    
-    @classmethod
-    def isInstance(cls, instance):
-        return (instance.post_type and instance.post_type in ('image',)) \
-            or instance.post_type is None
-    
     @classmethod
     def fromWpMediaItem(cls, wp_media_item):
         new_object = cls()
@@ -391,7 +200,7 @@ class WordPressImageAttachment(WordPressItem):
             self.__dict__[slot] = getattr(wp_media_item, slot)
         self.filename = UrlParser(self.link).path_parts()[-1]
     
-    def format_content_link(self):
+    def markdown_ref(self, context=None):
         if self.link and self.id:
             imtag = '<a href="%s"><img src="%s" class="wp-image-%d" %s/>' \
                 '</a>' % (self.link, self.link, self.id,
@@ -400,28 +209,6 @@ class WordPressImageAttachment(WordPressItem):
                 return '[caption id="attachment_%d" align="alignnone"]%s %s' \
                        '[/caption]' % (self.id, imtag, self.caption)
             return imtag
-    
-    def _process_en_note_title(self, note_title):
-        self.filename = note_title.split()[0]
-    
-    def _process_en_note_resources(self, note_resources, note_title=''):
-        if not note_resources or 0 == len(note_resources):
-            raise RuntimeError('Image note (%s) has no attached resources' %
-                               (note_title))
-        resource = note_resources[0]
-        if 1 < len(note_resources):
-            logger.warning('Image note has too many attached resources (%d). '
-                           'Choosing the first one, arbitrarily.',
-                           len(note_resources))
-        self._image_data = resource.data.body
-        self._image_mime = resource.mime
-        logger.debug('Got image with mimetype %s', self.mimetype)
-    
-    def processLinks(self, en_wrapper=None):
-        if EvernoteApiWrapper.is_evernote_url(self.parent):
-            self.parent = WordPressItem.createFromEvernote(self.parent,
-                                                           en_wrapper)
-            # self._ref_wp_items.add(self.parent)
     
     def image(self):
         "Returns a file-like object for reading image data."
@@ -437,6 +224,11 @@ class WordPressImageAttachment(WordPressItem):
     def mimetype(self):
         """Image attachment mimetype."""
         return self._image_mime
+    
+    @property
+    def filename(self):
+        """Image attachment filename."""
+        return self._filename
     
     def upload_new_stub(self, wp_wrapper):
         """Post this WordPress image as a stub item, and update the ID.
@@ -477,18 +269,7 @@ class WordPressImageAttachment(WordPressItem):
                                      self.parent.id)
 
 class WordPressPost(WordPressItem):
-    _slots = frozenset(('id', 'title', 'slug', 'post_type', 'author', 'tags',
-                        'post_status', 'content', 'categories', 'thumbnail',
-                        # Custom fields
-                        # TODO: refactor fields handling to be modular and
-                        #       extensible, without hardcoded (custom) fields
-                        'content_format', 'project', 'hemingway_grade',))
-    
-    @classmethod
-    def isInstance(cls, instance):
-        # TODO: refactor getting list of types
-        return instance.post_type and instance.post_type in ('post', 'page', )
-    
+
     @classmethod
     def fromWpPost(cls, wp_post):
         new_post = cls()
@@ -502,12 +283,6 @@ class WordPressPost(WordPressItem):
         self.tags = list()
         self.categories = list()
     
-    def get_slug(self):
-        if self.slug:
-            return self.slug
-        elif self.title:
-            return slugify.slugify(self.title)
-    
     @property
     def is_postable(self):
         """Return True if this item can be posted to a WordPress site."""
@@ -516,9 +291,9 @@ class WordPressPost(WordPressItem):
                 return False
         return True
     
-    def format_content_link(self, context=None):
+    def markdown_ref(self, context=None):
         """Return a formatted link to be used in post content referring to
-        this item.
+        this item, in Markdown format.
         
         If specified, `context` contains the original href element used,
         to allow custom processing.
@@ -531,41 +306,6 @@ class WordPressPost(WordPressItem):
                 return '%s "%s"' % (self.link, self.title.replace('"', ''))
             else:
                 return self.link
-    
-    def processLinks(self, en_wrapper=None):
-        def parse_content_link(match_obj):
-            enlink = match_obj.group(1)
-            item = WordPressItem.createFromEvernote(enlink, en_wrapper)
-            self._ref_wp_items.add(item)
-            link = item.format_content_link() #context=match_obj)
-            if link:
-                return link
-            else:
-                logger.warn('Could not format content link for "%s"', item)
-                return match_obj.group(0)
-        # TODO: refactor fields processing such that the fields themselves
-        #       define their processing (instead of hardcoding here)
-        # parse thumbnail image link
-        if (self.thumbnail and
-                EvernoteApiWrapper.is_evernote_url(self.thumbnail)):
-            self.thumbnail = WordPressItem.createFromEvernote(self.thumbnail,
-                                                              en_wrapper)
-        if self.thumbnail:
-            if not isinstance(self.thumbnail, WordPressImageAttachment):
-                logger.warning('Thumbnail is not a WordPress image item')
-        
-        if self.project and EvernoteApiWrapper.is_evernote_url(self.project):
-            self.project = WordPressItem.createFromEvernote(self.project,
-                                                            en_wrapper)
-        if self.project:
-            if not isinstance(self.project, WordPressPost):
-                logger.warning('Project is not a WordPress post item')
-        
-        # replace all <evernote:///...> links within content
-        # TODO: maybe match entire Markdown link?
-        #  (so I don't override the title if it is specified)
-        link_pattern = '\<(%s)\>' % (note_link_re.pattern)
-        self.content = re.sub(link_pattern, parse_content_link, self.content)
     
     def _init_from_wp_post(self, wp_post):
         self.id = wp_post.id
@@ -594,7 +334,7 @@ class WordPressPost(WordPressItem):
             post.id = self.id
         post.title = self.title
         post.content = self.content
-        post.slug = self.get_slug()
+        post.slug = self.slug
         post.post_status = self.post_status
         # TODO: author?
         if self.thumbnail and hasattr(self.thumbnail, 'id'):

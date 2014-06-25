@@ -4,7 +4,7 @@ import os
 
 import wordpress
 import wordpress_evernote
-from wordpress import WordPressPost, WordPressImageAttachment, WordPressItem
+from wordpress import WordPressPost, WordPressImageAttachment
 from wordpress import WordPressApiWrapper
 from my_evernote import EvernoteApiWrapper
 from wordpress_evernote import EvernoteWordpressAdaptor
@@ -85,6 +85,7 @@ class TestEvernoteWordPressParser(unittest.TestCase):
     @patch('my_evernote.EvernoteApiWrapper._init_en_client')
     def setUp(self, mock_init_en_client):
         wordpress.logger = Mock()
+        wordpress_evernote.logger = Mock()
         self.evernote = EvernoteApiWrapper(token='123')
         self.evernote.getNote = MagicMock(side_effect=mocked_get_note)
         self.adaptor = EvernoteWordpressAdaptor(self.evernote, None)
@@ -117,7 +118,6 @@ class TestEvernoteWordPressParser(unittest.TestCase):
     
     def test_evernote_image_parser(self):
         note = test_notes['image-with-id']
-        #wp_image = WordPressItem.createFromEvernote(note.guid, self.evernote)
         wp_image = self.adaptor.wp_item_from_note(note.guid)
         self.assertIsInstance(wp_image, WordPressImageAttachment)
         self.assertEqual(277, wp_image.id)
@@ -145,9 +145,8 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         self.assertListEqual(['Meta'], wp_post.categories)
         self.assertListEqual(['Multiword, Tag','test-tag'], wp_post.tags)
         self.assertEqual(544, wp_post.id)
-        self.assertIsNone(wp_post.slug)
         self.assertEqual('test-post-with-title-out-of-div-and-symbol',
-                         wp_post.get_slug())
+                         wp_post.slug)
         self.assertIsInstance(wp_post.thumbnail, WordPressImageAttachment)
         self.assertEqual('http://www.ostricher.com/images/test.png',
                          wp_post.thumbnail.link)
@@ -158,13 +157,13 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         # The thumbnail image is **also** expected in _ref_wp_items because
         #  it is also used as an image in the post content.
         self.assertSetEqual(
-          set([WordPressItem._cache['abcd1234-1234-abcd-1234-abcd1234abcd'],
-               WordPressItem._cache['abcd1234-5678-0000-7890-abcd1234abcd']]),
+          set([self.adaptor.cache['abcd1234-1234-abcd-1234-abcd1234abcd'],
+               self.adaptor.cache['abcd1234-5678-0000-7890-abcd1234abcd']]),
           wp_post._ref_wp_items)
     
     def test_evernote_page_parser(self):
         note = test_notes['project-page-with-id-nothumb']
-        wp_post = WordPressItem.createFromEvernote(note.guid, self.evernote)
+        wp_post = self.adaptor.wp_item_from_note(note.guid)
         self.assertIsInstance(wp_post, WordPressPost)
         self.assertEqual('page', wp_post.post_type)
         self.assertEqual('markdown', wp_post.content_format)
@@ -173,16 +172,15 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         self.assertListEqual([], wp_post.categories)
         self.assertListEqual([], wp_post.tags)
         self.assertEqual(583, wp_post.id)
-        self.assertIsNone(wp_post.slug)
         self.assertEqual('project-index',
-                         wp_post.get_slug())
-        self.assertEqual('', wp_post.thumbnail)
-        self.assertEqual("Nothing to see here.\n", wp_post.content)
+                         wp_post.slug)
+        self.assertIsNone(wp_post.thumbnail)
+        self.assertEqual('Nothing to see here.', wp_post.content)
         self.assertSetEqual(set(), wp_post._ref_wp_items)
     
     def test_evernote_project_post_parser(self):
         note = test_notes['project-note-with-id-nothumb']
-        wp_post = WordPressItem.createFromEvernote(note.guid, self.evernote)
+        wp_post = self.adaptor.wp_item_from_note(note.guid)
         self.assertIsInstance(wp_post, WordPressPost)
         self.assertEqual('post', wp_post.post_type)
         self.assertEqual('markdown', wp_post.content_format)
@@ -191,33 +189,29 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         self.assertListEqual([], wp_post.categories)
         self.assertListEqual([], wp_post.tags)
         self.assertEqual(303, wp_post.id)
-        self.assertIsNone(wp_post.slug)
-        self.assertEqual('another-test-note',
-                         wp_post.get_slug())
-        self.assertEqual('', wp_post.thumbnail)
-        self.assertEqual("Nothing to see here .\n", wp_post.content)
+        self.assertEqual('another-test-note', wp_post.slug)
+        self.assertIsNone(wp_post.thumbnail)
+        self.assertEqual('Nothing to see here .', wp_post.content)
         self.assertIsInstance(wp_post.project, WordPressPost)
         self.assertEqual(583, wp_post.project.id)
         self.assertSetEqual(set(), wp_post._ref_wp_items)
     
     def test_evernote_link_processor_parser(self):
         note = test_notes['project-note-noid']
-        wp_post = WordPressItem.createFromEvernote(note.guid, self.evernote)
+        wp_post = self.adaptor.wp_item_from_note(note.guid)
         self.assertIsInstance(wp_post, WordPressPost)
         self.assertEqual('post', wp_post.post_type)
         self.assertEqual('markdown', wp_post.content_format)
         self.assertEqual('New project note', wp_post.title)
         self.assertIsNone(wp_post.id)
-        self.assertIsNone(wp_post.slug)
-        self.assertEqual('new-project-note',
-                         wp_post.get_slug())
+        self.assertEqual('new-project-note', wp_post.slug)
         self.assertIsNone(wp_post.thumbnail)
         # TODO: refactor code to make this work.
         #self.assertEqual("Nothing to see here 583.\n", wp_post.content)
         self.assertIsInstance(wp_post.project, WordPressPost)
         self.assertEqual(583, wp_post.project.id)
         self.assertSetEqual(
-          set((WordPressItem._cache['abcd1234-aaaa-0000-ffff-abcd1234abcd'],)),
+          set((self.adaptor.cache['abcd1234-aaaa-0000-ffff-abcd1234abcd'],)),
           wp_post._ref_wp_items)
 
 class TestNoteMetadataAttrMatching(unittest.TestCase):
@@ -286,7 +280,7 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
     def test_update_existing_post(self):
         self.wordpress.edit_post = MagicMock(return_value=True)
         note = test_notes['project-note-with-id-nothumb']
-        wp_post = WordPressItem.createFromEvernote(note.guid, self.evernote)
+        wp_post = self.adaptor.wp_item_from_note(note.guid)
         self.assertIsInstance(wp_post, WordPressPost)
         wp_post.update_item(self.wordpress)
         self.assertTrue(self.wordpress.edit_post.called)
@@ -295,7 +289,7 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
         self.wordpress.new_post = MagicMock(return_value=660)
         self.wordpress.edit_post = MagicMock(return_value=True)
         note = test_notes['project-note-noid']
-        wp_post = WordPressItem.createFromEvernote(note.guid, self.evernote)
+        wp_post = self.adaptor.wp_item_from_note(note.guid)
         self.assertIsInstance(wp_post, WordPressPost)
         self.assertIsNone(wp_post.id)
         self.adaptor.post_to_wordpress_from_note(note.guid)
@@ -315,7 +309,7 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
         self.wordpress.get_post = MagicMock()
         self.wordpress.edit_post = MagicMock(return_value=True)
         note = test_notes['image-noid-existing-parent']
-        wp_image = WordPressItem.createFromEvernote(note.guid, self.evernote)
+        wp_image = self.adaptor.wp_item_from_note(note.guid)
         self.assertIsInstance(wp_image, WordPressImageAttachment)
         self.assertIsNone(wp_image.id)
         self.assertIsInstance(wp_image.parent, WordPressPost)
