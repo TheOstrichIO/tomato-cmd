@@ -68,11 +68,23 @@ test_notes = {
         content='project-note-2.xml'),
     'image-noid-existing-parent':
     EvernoteNote(
-        guid='abcd1234-1212-4040-2121--abcd1234abcd',
+        guid='abcd1234-1212-4040-2121-abcd1234abcd',
         title='new-image.png <auto>',
         notebookGuid='abcd1234-5678-cdef-7890-abcd1234abcd',
         content='image-no-id.xml',
         resources=[MagicMock()]),
+    'regression-projpage-a-br':
+    EvernoteNote(
+        guid='aaff0101-4343-abac-9898-aaaaeeeecccc',
+        title='The Ostrich Website project page',
+        notebookGuid='abcd1234-5678-1928-7890-abcd1234abcd',
+        content='regression-projpage-a-br.xml'),
+    'regression-projnote-span-br':
+    EvernoteNote(
+        guid='aaff0101-2048-abac-4096-aaaaeeeecccc',
+        title='The Ostrich note',
+        notebookGuid='abcd1234-5678-1928-7890-abcd1234abcd',
+        content='regression-projnote-span-br.xml'),
     }
 
 def mocked_get_note(guid):
@@ -81,6 +93,33 @@ def mocked_get_note(guid):
             return note
 
 class TestEvernoteWordPressParser(unittest.TestCase):
+    
+    def test_regression_nested_elements(self):
+        note = test_notes['regression-projnote-span-br']
+        wp_post = self.adaptor.wp_item_from_note(note.guid)
+        self.assertIsInstance(wp_post, WordPressPost)
+        self.assertEqual('post', wp_post.post_type)
+        self.assertEqual('markdown', wp_post.content_format)
+        self.assertEqual('A post in the project', wp_post.title)
+        self.assertEqual('ItamarO', wp_post.author)
+        self.assertEqual(9, wp_post.hemingway_grade)
+        self.assertListEqual(['Meta'], wp_post.categories)
+        self.assertListEqual(['side-projects'], wp_post.tags)
+        self.assertIsNone(wp_post.id)
+        self.assertIsNone(wp_post.date_created)
+        self.assertIsNone(wp_post.date_modified)
+        self.assertIsNone(wp_post.parent)
+        expected_content_lines = [
+            'Nothing to see here.', '',
+            '[gallery ids="277" size="medium" columns="1" link="file"]', '',
+            'Hello.', '',
+            '[gallery ids="277" size="medium" columns="1" link="file"]',
+            ]
+        self.assertListEqual(expected_content_lines,
+                             wp_post.content.split('\n'))
+        project = wp_post.project
+        self.assertIsInstance(project, WordPressPost)
+        self.assertEqual('The Ostrich Website', project.title)
     
     @patch('my_evernote.EvernoteApiWrapper._init_en_client')
     def setUp(self, mock_init_en_client):
