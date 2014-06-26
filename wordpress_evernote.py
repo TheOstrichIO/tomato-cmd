@@ -281,17 +281,20 @@ class EvernoteWordpressAdaptor(object):
                 append_tail(tail)
             elif tag in ('a', 'span', 'en-todo', 'en-media'):
                 # Not expecting deeper levels!
-                assert(0 == len(root))
-                child = ET.SubElement(target_node if target_node is not None
-                                      else ET.SubElement(get_active_node(),
-                                                         'p'),
-                                      tag)
-                if root.get('href'):
-                    child.set('href', root.get('href'))
-                if text:
-                    child.text = text
-                if tail:
-                    child.tail = tail
+                if 0 < len(root):
+                    logger.warn('Skipping element with unexpected nested '
+                                'elements: %s', ET.tostring(root))
+                else:
+                    #assert(0 == len(root))
+                    child = ET.SubElement(target_node if target_node is not None
+                                          else ET.SubElement(get_active_node(),
+                                                             'p'), tag)
+                    if root.get('href'):
+                        child.set('href', root.get('href'))
+                    if text:
+                        child.text = text
+                    if tail:
+                        child.tail = tail
             else:
                 # Unexpected tag?
                 logger.warn('Unexpected tag "%s"', root)
@@ -360,6 +363,10 @@ class EvernoteWordpressAdaptor(object):
             'hemingwayapp-grade': 'hemingway_grade',
         }
         for metadata in item_dom.findall(".//div[@id='metadata']/p"):
+            if metadata.text is None:
+                continue
+            if metadata.text.startswith('#'):
+                continue
             pos = metadata.text.find('=')
             attr_name = metadata.text[:pos]
             attr_name = name_mappings.get(attr_name, attr_name)
@@ -426,7 +433,7 @@ class EvernoteWordpressAdaptor(object):
         # Get note from Evernote
         en_note = self.evernote.getNote(note_link)
         # Create a WordPress item from note
-        #: :type wp_post: WordPressItem
+        #: :type wp_item: WordPressItem
         wp_item = self.wp_item_from_note(en_note)
         # Post the item
         self.create_wordpress_stub_from_note(wp_item, en_note)
