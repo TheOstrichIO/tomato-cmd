@@ -109,6 +109,7 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         self.assertIsNone(wp_post.date_created)
         self.assertIsNone(wp_post.date_modified)
         self.assertIsNone(wp_post.parent)
+        self.assertIsNone(wp_post.thumbnail)
         expected_content_lines = [
             'Nothing to see here.', '',
             '[gallery ids="277" size="medium" columns="1" link="file"]', '',
@@ -119,7 +120,10 @@ class TestEvernoteWordPressParser(unittest.TestCase):
                              wp_post.content.split('\n'))
         project = wp_post.project
         self.assertIsInstance(project, WordPressPost)
+        self.assertIsNone(project.thumbnail)
         self.assertEqual('The Ostrich Website', project.title)
+        self.assertEqual('This is the index page for "The Ostrich" website '
+                         'project.', project.content)
     
     @patch('my_evernote.EvernoteApiWrapper._init_en_client')
     def setUp(self, mock_init_en_client):
