@@ -289,7 +289,7 @@ class EvernoteWordpressAdaptor(object):
                     logger.warn('Skipping element with unexpected nested '
                                 'elements: %s', ET.tostring(root))
                 else:
-                    #assert(0 == len(root))
+                    assert(0 == len(root))
                     child = ET.SubElement(
                         target_node if target_node is not None
                         else ET.SubElement(get_active_node(), 'p'),
@@ -318,6 +318,15 @@ class EvernoteWordpressAdaptor(object):
             else:
                 # Unexpected tag?
                 logger.warn('Unexpected tag "%s"', root)
+        # Start HERE
+        # Cleanup DOM (regression of rogue <br /> in a-element)
+        for bad_a in root.findall('.//a/br/..'):
+            logger.warn('Removing rogue a-node with br-child (%s), '
+                        'and inserting br-node instead', ET.tostring(bad_a))
+            tail = bad_a.tail
+            bad_a.clear()
+            bad_a.tag = 'br'
+            bad_a.tail = tail
         # Parse all sub elements of main en-note
         for e in root:
             parse_node(e)

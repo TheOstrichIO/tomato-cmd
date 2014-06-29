@@ -94,38 +94,6 @@ def mocked_get_note(guid):
 
 class TestEvernoteWordPressParser(unittest.TestCase):
     
-    def test_regression_nested_elements(self):
-        note = test_notes['regression-projnote-span-br']
-        wp_post = self.adaptor.wp_item_from_note(note.guid)
-        self.assertIsInstance(wp_post, WordPressPost)
-        self.assertEqual('post', wp_post.post_type)
-        self.assertEqual('markdown', wp_post.content_format)
-        self.assertEqual('A post in the project', wp_post.title)
-        self.assertEqual('ItamarO', wp_post.author)
-        self.assertEqual(9, wp_post.hemingway_grade)
-        self.assertListEqual(['Meta'], wp_post.categories)
-        self.assertListEqual(['side-projects'], wp_post.tags)
-        self.assertIsNone(wp_post.id)
-        self.assertIsNone(wp_post.date_created)
-        self.assertIsNone(wp_post.date_modified)
-        self.assertIsNone(wp_post.parent)
-        self.assertIsNone(wp_post.thumbnail)
-        expected_content_lines = [
-            'Nothing to see here.', '',
-            '[gallery ids="277" size="medium" columns="1" link="file"]', '',
-            'Hello.', '',
-            '[gallery ids="277" size="medium" columns="1" link="file"]', '',
-            'Media tag in span '
-            ]
-        self.assertListEqual(expected_content_lines,
-                             wp_post.content.split('\n'))
-        project = wp_post.project
-        self.assertIsInstance(project, WordPressPost)
-        self.assertIsNone(project.thumbnail)
-        self.assertEqual('The Ostrich Website', project.title)
-        self.assertEqual('This is the index page for "The Ostrich" website '
-                         'project.', project.content)
-    
     @patch('my_evernote.EvernoteApiWrapper._init_en_client')
     def setUp(self, mock_init_en_client):
         wordpress.logger = Mock()
@@ -256,6 +224,38 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         self.assertSetEqual(
           set((self.adaptor.cache['abcd1234-aaaa-0000-ffff-abcd1234abcd'],)),
           wp_post._ref_wp_items)
+    
+    def test_regression_nested_elements(self):
+        note = test_notes['regression-projnote-span-br']
+        wp_post = self.adaptor.wp_item_from_note(note.guid)
+        self.assertIsInstance(wp_post, WordPressPost)
+        self.assertEqual('post', wp_post.post_type)
+        self.assertEqual('markdown', wp_post.content_format)
+        self.assertEqual('A post in the project', wp_post.title)
+        self.assertEqual('ItamarO', wp_post.author)
+        self.assertEqual(9, wp_post.hemingway_grade)
+        self.assertListEqual(['Meta'], wp_post.categories)
+        self.assertListEqual(['side-projects'], wp_post.tags)
+        self.assertIsNone(wp_post.id)
+        self.assertIsNone(wp_post.date_created)
+        self.assertIsNone(wp_post.date_modified)
+        self.assertIsNone(wp_post.parent)
+        self.assertIsNone(wp_post.thumbnail)
+        expected_content_lines = [
+            'Nothing to see here.', '',
+            '[gallery ids="277" size="medium" columns="1" link="file"]', '',
+            'Hello.', '',
+            '[gallery ids="277" size="medium" columns="1" link="file"]', '',
+            'Media tag in span '
+            ]
+        self.assertListEqual(expected_content_lines,
+                             wp_post.content.split('\n'))
+        project = wp_post.project
+        self.assertIsInstance(project, WordPressPost)
+        self.assertIsNone(project.thumbnail)
+        self.assertEqual('The Ostrich Website', project.title)
+        self.assertEqual('This is the index page for "The Ostrich" website '
+                         'project.', project.content)
 
 class TestNoteMetadataAttrMatching(unittest.TestCase):
     
