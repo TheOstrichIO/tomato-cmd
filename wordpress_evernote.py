@@ -166,6 +166,10 @@ class WpEnContent(WpEnAttribute):
                 return e.text
             elif 'en-todo' == tag:
                 return '&#x2751;'
+            elif 'en-media' == tag:
+                logger.warn('Unexpected en-media element in content: %s',
+                            ET.tostring(e))
+                return ''
             else:
                 raise NoteParserError('Invalid tag "%s" in content paragraph' %
                                       (ET.tostring(e)))
@@ -279,22 +283,38 @@ class EvernoteWordpressAdaptor(object):
                 for e in root:
                     parse_node(e, p)
                 append_tail(tail)
-            elif tag in ('a', 'span', 'en-todo', 'en-media'):
+            elif tag in ('a', 'en-todo', 'en-media'):
                 # Not expecting deeper levels!
                 if 0 < len(root):
                     logger.warn('Skipping element with unexpected nested '
                                 'elements: %s', ET.tostring(root))
                 else:
                     #assert(0 == len(root))
-                    child = ET.SubElement(target_node if target_node is not None
-                                          else ET.SubElement(get_active_node(),
-                                                             'p'), tag)
+                    child = ET.SubElement(
+                        target_node if target_node is not None
+                        else ET.SubElement(get_active_node(), 'p'),
+                        tag)
                     if root.get('href'):
                         child.set('href', root.get('href'))
                     if text:
                         child.text = text
                     if tail:
                         child.tail = tail
+            elif tag in ('span',):
+                # Treat span like it simply isn't there...
+                if text:
+                    if target_node is None:
+                        logger.warn('Don\'t know what to do with text in '
+                                    'top level span element: %s',
+                                    ET.tostring(root))
+                    else:
+                        target_node.text += text
+                for e in root:
+                    parse_node(e, target_node)
+                if tail:
+                    logger.warn('Guessing how to append tail of span element: '
+                                '%s', ET.tostring(root))
+                    append_tail(tail)
             else:
                 # Unexpected tag?
                 logger.warn('Unexpected tag "%s"', root)

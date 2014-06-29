@@ -114,7 +114,8 @@ class TestEvernoteWordPressParser(unittest.TestCase):
             'Nothing to see here.', '',
             '[gallery ids="277" size="medium" columns="1" link="file"]', '',
             'Hello.', '',
-            '[gallery ids="277" size="medium" columns="1" link="file"]',
+            '[gallery ids="277" size="medium" columns="1" link="file"]', '',
+            'Media tag in span '
             ]
         self.assertListEqual(expected_content_lines,
                              wp_post.content.split('\n'))

@@ -26,5 +26,5 @@ title=A post in the project
 <div><span><br/></span></div>
 <div><a href="evernote:///view/123/s123/abcd1234-1234-abcd-1234-abcd1234abcd/abcd1234-1234-abcd-1234-abcd1234abcd/" style="color: rgb(105, 170, 53);">test-thumb.png</a><span><br/></span></div>
 <div><br/></div>
-<div><span><en-media hash="01929388747665657489762398647" style="height: auto;" type="image/png" /></span></div>
+<div>Media tag in span <span><en-media hash="01929388747665657489762398647" style="height: auto;" type="image/png" /></span></div>
 </en-note>
