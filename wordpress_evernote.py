@@ -501,7 +501,9 @@ class EvernoteWordpressAdaptor(object):
         
         :param query: Evernote query used to find notes to detach.
         """
-        attrs_to_update = {'id': '&lt;auto&gt;', 'link': '&lt;auto&gt;', }
+        attrs_to_update = {'id': '&lt;auto&gt;',
+                           'link': '&lt;auto&gt;',
+                           'date_modified': '&lt;auto&gt;', }
         for _, note_meta in self.evernote.get_notes_by_query(query):
             note = self.evernote.getNote(note_meta.guid,
                                          with_resource_data=False)
@@ -565,8 +567,9 @@ class EvernoteWordpressAdaptor(object):
         # TODO: get authoritative attributes from WordPress class
         attrs_to_update = {'id': str(item.id), }
         for attr in ['link', 'date_modified']:
-            if hasattr(item, attr):
-                attrs_to_update[attr] = getattr(item, attr)
+            if attr in item._wp_attrs and isinstance(item._wp_attrs[attr],
+                                                     WordPressAttribute):
+                attrs_to_update[attr] = item._wp_attrs[attr].repr()
         self.update_note_metdata(note, attrs_to_update)
 
 def save_wp_image_to_evernote(en_wrapper, notebook_name, wp_image,

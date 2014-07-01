@@ -64,6 +64,11 @@ class WordPressAttribute(object):
     
     def fdel(self):
         del self._value
+    
+    def repr(self):
+        """Return plain text representation of attribute value,
+        safe to be used for serialization."""
+        return repr(self.fget())
 
 class WordPressSlugAttribute(WordPressAttribute):
     """WordPress item slug attribute."""
@@ -102,7 +107,7 @@ class WordPressDateTimeAttribute(WordPressAttribute):
             else:
                 self._value = value
     
-    def for_xml_rpc(self):
+    def repr(self):
         if isinstance(self._value, datetime.datetime):
             return self._value.strftime(self._format)
         return str(self._value)
