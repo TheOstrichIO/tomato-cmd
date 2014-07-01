@@ -569,7 +569,7 @@ class EvernoteWordpressAdaptor(object):
         for attr in ['link', 'date_modified']:
             if attr in item._wp_attrs and isinstance(item._wp_attrs[attr],
                                                      WordPressAttribute):
-                attrs_to_update[attr] = item._wp_attrs[attr].repr()
+                attrs_to_update[attr] = item._wp_attrs[attr].str()
         self.update_note_metdata(note, attrs_to_update)
 
 def save_wp_image_to_evernote(en_wrapper, notebook_name, wp_image,
