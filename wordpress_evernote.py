@@ -493,7 +493,8 @@ class EvernoteWordpressAdaptor(object):
         """
         attrs_to_update = {'id': '&lt;auto&gt;', 'link': '&lt;auto&gt;', }
         for _, note_meta in self.evernote.get_notes_by_query(query):
-            note = self.evernote.getNote(note_meta.guid)
+            note = self.evernote.getNote(note_meta.guid,
+                                         with_resource_data=False)
             logger.info('Detaching note "%s" (GUID %s)', note.title, note.guid)
             self.update_note_metdata(note, attrs_to_update)
     
