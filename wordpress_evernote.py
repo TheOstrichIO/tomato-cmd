@@ -474,6 +474,8 @@ class EvernoteWordpressAdaptor(object):
         # Create a WordPress item from note
         #: :type wp_item: WordPressItem
         wp_item = self.wp_item_from_note(en_note)
+        # TODO: if wp_item has ID, then compare modified dates of wp_item and
+        #  the underlying Evernote note, and stop here if no need to update.
         # Post the item
         self.create_wordpress_stub_from_note(wp_item, en_note)
         for ref_wp_item in wp_item.ref_items:
