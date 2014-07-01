@@ -1,6 +1,7 @@
 import unittest
-from mock import patch, Mock, MagicMock
+from mock import patch, Mock, MagicMock, call
 import os
+from datetime import datetime
 
 import wordpress
 import wordpress_evernote
@@ -28,6 +29,13 @@ class EvernoteNote(object):
         fpath = os.path.join('test-data', 'notes-content', fname)
         with open(fpath, 'r') as note_file:
             return note_file.read()
+
+class WordpressXmlRpcItem(object):
+    """Dummy Wordpress XML-RPC class for mocking in unit tests."""
+    def __init__(self, **kwargs):
+        self.resources = list()
+        for k, v in kwargs.iteritems():
+            setattr(self, k, v)
 
 test_notebooks = [
     EvernoteNotebook('abcd1234-5678-abef-7890-abcd1234abcd', 'Blog Posts'),
@@ -270,19 +278,20 @@ class TestNoteMetadataAttrMatching(unittest.TestCase):
             (' id = 123 ', 'id = 123', '123'),
             (' <div>    id    =    123    </div> ', 'id    =    123', '123'),]
         for test_string, exp_attr, exp_v in matches:
-            m = self.id_matcher.match(test_string)
+            d = EvernoteWordpressAdaptor._get_attr_groupdict('id', test_string)
             self.assertIsNotNone(
-                m, 'Did not match anything in "%s"' % test_string)
-            self.assertDictEqual({'attr': exp_attr, 'value': exp_v},
-                                 m.groupdict())
+                d, 'Did not match anything in "%s"' % test_string)
+            self.assertDictEqual({'attr': exp_attr, 'value': exp_v}, d)
     
     def test_note_metadata_attr_non_matching(self):
         non_matches = [
             'let me say something about id=13',
-            '<div>id=45 is my friend</div>',
+            'why <div>id=45 is my friend</div> bla',
             'a sentence about <div>id=5</div>']
         for test_string in non_matches:
-            self.assertIsNone(self.id_matcher.match(test_string))
+            self.assertIsNone(
+                EvernoteWordpressAdaptor._get_attr_groupdict('id',
+                                                             test_string))
     
     def test_note_metadata_attr_searching(self):
         attrs_string = """<?xml version="1.0" encoding="UTF-8" standalone="no"?>
@@ -295,15 +304,14 @@ id = 2
 <div>id=&lt;auto&gt;</div>
 <!-- Items that should not match -->
 let me say something about id=13',
-<div>id=45 is my friend</div>
 a sentence about <div>id=5</div>
 """
         expected_attr_matches = ['1', '2', '3', '&lt;auto&gt;']
         matches = list()
         for line in attrs_string.split('\n'):
-            m = self.id_matcher.match(line)
-            if m:
-                matches.append(m.groupdict()['value'])
+            d = EvernoteWordpressAdaptor._get_attr_groupdict('id', line)
+            if d:
+                matches.append(d['value'])
         self.assertListEqual(expected_attr_matches, matches)
 
 class TestEvernoteWordPressPublisher(unittest.TestCase):
@@ -322,20 +330,27 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
     
     def test_update_existing_post(self):
         self.wordpress.edit_post = MagicMock(return_value=True)
+        self.wordpress.get_post = MagicMock()
         note = test_notes['project-note-with-id-nothumb']
         wp_post = self.adaptor.wp_item_from_note(note.guid)
         self.assertIsInstance(wp_post, WordPressPost)
         wp_post.update_item(self.wordpress)
         self.assertTrue(self.wordpress.edit_post.called)
+        self.wordpress.get_post.assert_called_once_with(303)
     
     def test_publish_project_note_existing_project_index(self):
         self.wordpress.new_post = MagicMock(return_value=660)
         self.wordpress.edit_post = MagicMock(return_value=True)
+        self.wordpress.get_post = MagicMock(
+            return_value=WordpressXmlRpcItem(
+                id=660, link='http://www.ostricher.com/project-note',
+                date_modified=datetime(2014, 7, 1, 9, 45, 12)))
         note = test_notes['project-note-noid']
         wp_post = self.adaptor.wp_item_from_note(note.guid)
         self.assertIsInstance(wp_post, WordPressPost)
         self.assertIsNone(wp_post.id)
         self.adaptor.post_to_wordpress_from_note(note.guid)
+        self.wordpress.get_post.assert_called_once_with(660)
         self.assertEqual(660, wp_post.id)
         expected_note = EvernoteNote(
             guid='abcd1234-aaaa-2048-ffff-abcd1234abcd',
@@ -344,12 +359,17 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
             content='published-project-note.xml')
         self.assertListEqual(expected_note.content.split('\n'),
                              note.content.split('\n'))
-        self.evernote.updateNote.assert_called_once_with(note)
+        self.evernote.updateNote.assert_has_calls(
+            [call(note),    # once for the stub creation
+             call(note)])   # once for metadata update
         self.assertTrue(self.wordpress.edit_post.called)
     
     def test_upload_new_image_existing_parent(self):
         self.wordpress.upload_file = MagicMock(return_value={'id': 792,})
-        self.wordpress.get_post = MagicMock()
+        self.wordpress.get_post = MagicMock(
+            return_value=WordpressXmlRpcItem(
+                id=792, link='http://www.ostricher.com/images/new-test.png',
+                date_modified=datetime(2014, 7, 1, 9, 45, 12)))
         self.wordpress.edit_post = MagicMock(return_value=True)
         note = test_notes['image-noid-existing-parent']
         wp_image = self.adaptor.wp_item_from_note(note.guid)
@@ -359,19 +379,21 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
         self.assertIsNotNone(wp_image.parent.id)
         self.adaptor.post_to_wordpress_from_note(note.guid)
         self.assertEqual(792, wp_image.id)
+        self.assertEqual(datetime(2014, 7, 1, 9, 45, 12),
+                         wp_image.date_modified)
         expected_note = EvernoteNote(
-            guid='abcd1234-1212-4040-2121--abcd1234abcd',
-            title='new-image.png <auto>',
+            guid='abcd1234-1212-4040-2121-abcd1234abcd',
+            title='new-image.png',
             notebookGuid='abcd1234-5678-1928-7890-abcd1234abcd',
             content='uploaded-image.xml')
         self.assertListEqual(expected_note.content.split('\n'),
                              note.content.split('\n'))
-        self.evernote.updateNote.assert_called_once_with(note)
+        self.evernote.updateNote.assert_has_calls([call(note), call(note)])
         self.assertTrue(self.wordpress.upload_file.called)
-        self.wordpress.get_post.assert_called_once_with(792)
-        self.assertTrue(self.wordpress.edit_post.called)
-        self.wordpress.edit_post.assert_called_once_with(
-            792, self.wordpress.get_post.return_value)
+        self.wordpress.get_post.assert_has_calls([call(792), call(792)])
+        self.wordpress.edit_post.assert_has_calls(
+            [call(self.wordpress.get_post.return_value),
+             call(self.wordpress.get_post.return_value)])
     
     def test_publish_new_note_with_new_thumbnail(self):
         pass

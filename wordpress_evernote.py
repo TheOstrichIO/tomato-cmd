@@ -197,7 +197,7 @@ class EvernoteWordpressAdaptor(object):
     """Evernote-Wordpress Adaptor class."""
     
     _attr_pattern = ('(\A|\s*\<\w+\>)\s*(?P<attr>{attr_name}\s*\=\s*'
-                    '(?P<value>[\w\&\;]+))\s*(\Z|\<\/\w+\>\s*)')
+                    '(?P<value>[^\<]+))\s*(\Z|\<\/\w+\>\s*)')
     _attr_matchers_cache = dict()
     _hr_matcher = re.compile('\<hr\s*\/?\>', re.IGNORECASE)
     
@@ -215,6 +215,15 @@ class EvernoteWordpressAdaptor(object):
                              re.IGNORECASE)
         cls._attr_matchers_cache[attr_name] = matcher
         return matcher
+    
+    @classmethod
+    def _get_attr_groupdict(cls, attr_name, string):
+        m = cls._get_attr_matcher(attr_name).match(string)
+        if m:
+            d = m.groupdict()
+            d['attr'] = d['attr'].strip()
+            d['value'] = d['value'].strip()
+            return d
     
     @staticmethod
     def _parse_xml_from_string(xml_string):
@@ -424,7 +433,8 @@ class EvernoteWordpressAdaptor(object):
                                len(note.resources))
             wp_item._image_data = resource.data.body
             wp_item._image_mime = resource.mime
-            logger.debug('Got image with mimetype %s', wp_item.mimetype)
+            logger.debug('Got image %s with mimetype %s',
+                         note.title, wp_item.mimetype)
         return wp_item
     
     def create_wordpress_stub_from_note(self, wp_item, en_note):
@@ -516,15 +526,15 @@ class EvernoteWordpressAdaptor(object):
                 # <hr /> tag means end of metadata section
                 break
             for attr, new_val in attrs_to_update.iteritems():
-                m = self._get_attr_matcher(attr).match(line)
-                if m:
-                    current_val = m.groupdict()['value']
+                d = self._get_attr_groupdict(attr, line)
+                if d:
+                    current_val = d['value'].strip()
                     if new_val == current_val:
                         logger.debug('No change in attribute "%s"', attr)
                     else:
                         logger.debug('Changing note attribute "%s" from "%s" '
                                      'to "%s"', attr, current_val, new_val)
-                        attr_str = m.groupdict()['attr']
+                        attr_str = d['attr']
                         content_lines[linenum] = line.replace(
                             attr_str, '%s=%s' % (attr, new_val))
                         modified_flag = True
@@ -553,7 +563,10 @@ class EvernoteWordpressAdaptor(object):
          :raise RuntimeError: If ID is set and differs
         """
         # TODO: get authoritative attributes from WordPress class
-        attrs_to_update = {'id': str(item.id), } #('link', post.link),)
+        attrs_to_update = {'id': str(item.id), }
+        for attr in ['link', 'date_modified']:
+            if hasattr(item, attr):
+                attrs_to_update[attr] = getattr(item, attr)
         self.update_note_metdata(note, attrs_to_update)
 
 def save_wp_image_to_evernote(en_wrapper, notebook_name, wp_image,

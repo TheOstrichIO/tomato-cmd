@@ -9,7 +9,8 @@ title=New project note
 <div>categories=Meta</div>
 <div>tags="Multiword, Tag",test-tag</div>
 <div>project=<a href="evernote:///view/123/s123/abcd1234-aaaa-0000-ffff-abcd1234abcd/abcd1234-aaaa-0000-ffff-abcd1234abcd/" style="color: rgb(105, 170, 53);">Project index</a></div>
-<div>link=&lt;auto&gt;</div>
+<div>link=http://www.ostricher.com/project-note</div>
+<div>date_modified=2014-07-01 09:45:12</div>
 <div><br/></div>
 <div>
 <hr/></div>

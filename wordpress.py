@@ -3,11 +3,13 @@
 
 import urllib2
 import re
+import datetime
 
 # WordPress API:
 #import wordpress_xmlrpc
 from wordpress_xmlrpc import Client #, WordPressPost
 from wordpress_xmlrpc import WordPressPost as XmlRpcPost
+from wordpress_xmlrpc import WordPressPage as XmlRpcPage
 #from wordpress_xmlrpc import WordPressPage as XmlRpcPage
 from wordpress_xmlrpc.compat import xmlrpc_client
 #from wordpress_xmlrpc.methods.posts import GetPosts, NewPost
@@ -32,6 +34,8 @@ class WordPressAttribute(object):
         """
         if attr_name in ('slug',):
             return WordPressSlugAttribute(value, wp_item)
+        elif attr_name in ('date_modified', 'date_created'):
+            return WordPressDateTimeAttribute(value, wp_item)
         else:
             return WordPressAttribute(value, wp_item)
     
@@ -39,21 +43,24 @@ class WordPressAttribute(object):
         """Initialize a basic WordPress attribute with plain string."""
         assert(isinstance(value, basestring))
         super(WordPressAttribute, self).__init__(*args, **kwargs)
-        if '<auto>' == value:
-            self._value = None
-            self._auto = True
-        else:
-            if value and value.isdigit():
-                value = int(value)
-            self._value = value
-            self._auto = False
+        self.fset(value)
         self._wp_item = wp_item
     
     def fget(self):
         return self._value
     
     def fset(self, value):
-        self._value = value
+        if isinstance(value, basestring):
+            if '<auto>' == value.strip():
+                self._value = None
+                self._auto = True
+            else:
+                if value and value.isdigit():
+                    value = int(value)
+                self._value = value
+                self._auto = False
+        else:
+            self._value = value
     
     def fdel(self):
         del self._value
@@ -72,6 +79,33 @@ class WordPressSlugAttribute(WordPressAttribute):
         else:
             return self._value
 
+class WordPressDateTimeAttribute(WordPressAttribute):
+    """WordPress date time attribute."""
+    
+    _format = '%Y-%m-%d %H:%M:%S'
+    
+    def __init__(self, value, wp_item, *args, **kwargs):
+        """Initialize a DateTime WordPress attribute."""
+        super(WordPressDateTimeAttribute, self).__init__(value, wp_item,
+                                                         *args, **kwargs)
+        self._auto = True
+    
+    def fset(self, value):
+        """Set a DateTime attribute from string or from DateTime object."""
+        if isinstance(value, datetime.datetime):
+            self._value = value
+        else:
+            if '<auto>' == value.strip():
+                self._value = None
+            elif isinstance(value, basestring):
+                self._value = datetime.datetime.strptime(value, self._format)
+            else:
+                self._value = value
+    
+    def for_xml_rpc(self):
+        if isinstance(self._value, datetime.datetime):
+            return self._value.strftime(self._format)
+        return str(self._value)
 
 def wp_property(attr, default=None):
     """Return a WordPress property.
@@ -183,6 +217,18 @@ class WordPressItem(object):
         if self.id:
             raise RuntimeError('WordPress item has ID set.')
         self.upload_new_stub(wp_wrapper)
+    
+    def update_auto_attributes(self, wp_wrapper, xml_post=None):
+        """Get the updated WordPress XML-RPC item and update auto fields.
+        
+        :type wp_wrapper: WordPressApiWrapper
+        """
+        if xml_post is None:
+            assert(self.id is not None)
+            xml_post = wp_wrapper.get_post(self.id)
+        # TODO: use attributes dictionary to do this automatically
+        self.date_modified = xml_post.date_modified
+        self.link = xml_post.link
 
 class WordPressImageAttachment(WordPressItem):
     
@@ -249,6 +295,8 @@ class WordPressImageAttachment(WordPressItem):
             }
         response = wp_wrapper.upload_file(data)
         self.id = response.get('id')
+        # update item attachment
+        self.update_item(wp_wrapper)
     
     def update_item(self, wp_wrapper):
         """Update image attachment based on this instance.
@@ -265,12 +313,15 @@ class WordPressImageAttachment(WordPressItem):
         # The UploadFile method doesn't support setting parent ID,
         # so we need to get the uploaded image as post item and edit it.
         # TODO: refactor to parent property
+        as_post = wp_wrapper.get_post(self.id)
+        for attr in ['title', 'caption', 'description']:
+            setattr(as_post, attr, getattr(self, attr))
         if self.parent and hasattr(self.parent, 'id'):
-            as_post = wp_wrapper.get_post(self.id)
             as_post.parent_id = self.parent.id
-            if not wp_wrapper.edit_post(self.id, as_post):
-                raise RuntimeWarning('Failed setting parent ID to %d',
-                                     self.parent.id)
+        if not wp_wrapper.edit_post(as_post):
+            raise RuntimeWarning('Failed setting parent ID to %d',
+                                 self.parent.id)
+        self.update_auto_attributes(wp_wrapper, as_post)
 
 class WordPressPost(WordPressItem):
 
@@ -328,10 +379,11 @@ class WordPressPost(WordPressItem):
         # TODO: bring categories, tags, author, thumbnail, content
         # TODO: bring hemingway-grade and content format custom fields
     
-    def as_xml_rpc_post(self):
-        """Return XML RPC WordPressPost item representation of this instance
-        @rtype: wordpress_xmlrpc.WordPressPost
-        """
+    def as_xml_rpc_obj(self):
+        """Return XML RPC WordPress item representation of this instance,
+        with fields populated from the WP attributes of this instance."""
+        post = self.xml_rpc_object()
+        
         def add_custom_field(post, key, val):
             if not hasattr(post, 'custom_fields'):
                 post.custom_fields = list()
@@ -340,7 +392,7 @@ class WordPressPost(WordPressItem):
             if not hasattr(post, 'terms_names'):
                 post.terms_names = dict()
             post.terms_names[tax_name] = terms_names
-        post = XmlRpcPost()
+        
         # TODO: let the fields represent themselves
         if self.id:
             post.id = self.id
@@ -355,6 +407,9 @@ class WordPressPost(WordPressItem):
             add_terms(post, 'post_tag', self.tags)
         if self.categories:
             add_terms(post, 'category', self.categories)
+        if (self.parent and hasattr(self.parent, 'id') and
+            self.parent.id is not None):
+            post.parent = self.parent.id
         if self.content_format:
             add_custom_field(post, 'content_format', self.content_format)
         if self.project and hasattr(self.project, 'id'):
@@ -363,15 +418,13 @@ class WordPressPost(WordPressItem):
             add_custom_field(post, 'hemingwayapp-grade', self.hemingway_grade)
         return post
     
-    def as_xml_rpc_page(self):
-        """Return XML RPC WordPressPage item representation of this instance
-        @rtype: wordpress_xmlrpc.WordPressPost
-        """
-        page = self.as_xml_rpc_post()
-        if (self.parent and hasattr(self.parent, 'id') and
-            self.parent.id is not None):
-            page.parent = self.parent.id
-        return page
+    def xml_rpc_object(self):
+        """Return a new XML-RPC object for this instance type."""
+        if self.post_type in ('post',):
+            return XmlRpcPost()
+        elif self.post_type in ('page',):
+            return XmlRpcPage()
+        raise ValueError('Invalid post type "%s"', self.post_type)
     
     def upload_new_stub(self, wp_wrapper):
         """Post this WordPress post as a stub item, and update the ID.
@@ -380,7 +433,7 @@ class WordPressPost(WordPressItem):
         
         :type wp_wrapper: WordPressApiWrapper
         """
-        stub_post = XmlRpcPost()
+        stub_post = self.xml_rpc_object()
         stub_post.title = self.title
         self.id = wp_wrapper.new_post(stub_post)
     
@@ -398,12 +451,10 @@ class WordPressPost(WordPressItem):
             raise RuntimeError('Cannot update post with no ID')
         if not self.is_postable:
             raise RuntimeError('Post instance not fully processed')
-        if 'post' == self.post_type:
-            xmlrpc_post = self.as_xml_rpc_post()
-        elif 'page' == self.post_type:
-            xmlrpc_post = self.as_xml_rpc_page()
-        if not wp_wrapper.edit_post(xmlrpc_post):
+        xmlrpc_obj = self.as_xml_rpc_obj()
+        if not wp_wrapper.edit_post(xmlrpc_obj):
             raise RuntimeError('Failed updating WordPress post')
+        self.update_auto_attributes(wp_wrapper)
 
 class WordPressApiWrapper(object):
     """WordPress client API wrapper class."""
