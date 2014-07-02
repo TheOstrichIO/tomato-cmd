@@ -4,6 +4,7 @@ import re
 import argparse
 from xml.etree import ElementTree as ET
 import csv
+from datetime import datetime
 
 import settings
 import common
@@ -470,20 +471,26 @@ class EvernoteWordpressAdaptor(object):
                             note with item to publish.
         """
         # Get note from Evernote
+        #: :type en_note: evernote.edam.type.ttypes.Note
         en_note = self.evernote.getNote(note_link)
+        # Convert Evernote timestamp (ms from epoch) to DateTime object
+        # (http://dev.evernote.com/doc/reference/Types.html#Typedef_Timestamp)
+        note_updated = datetime.fromtimestamp(en_note.updated/1000)
         # Create a WordPress item from note
         #: :type wp_item: WordPressItem
         wp_item = self.wp_item_from_note(en_note)
-        # TODO: if wp_item has ID, then compare modified dates of wp_item and
-        #  the underlying Evernote note, and stop here if no need to update.
-        # Post the item
-        self.create_wordpress_stub_from_note(wp_item, en_note)
-        for ref_wp_item in wp_item.ref_items:
-            self.create_wordpress_stub_from_note(
-                ref_wp_item, ref_wp_item._underlying_en_note)
-        wp_item.update_item(self.wordpress)
-        # Update note metadata from published item (e.g. ID for new item)
-        self.update_note_metadata_from_wordpress_post(en_note, wp_item)
+        if wp_item.date_modified and note_updated > wp_item.date_modified:
+            # Post the item
+            self.create_wordpress_stub_from_note(wp_item, en_note)
+            for ref_wp_item in wp_item.ref_items:
+                self.create_wordpress_stub_from_note(
+                    ref_wp_item, ref_wp_item._underlying_en_note)
+            wp_item.update_item(self.wordpress)
+            # Update note metadata from published item (e.g. ID for new item)
+            self.update_note_metadata_from_wordpress_post(en_note, wp_item)
+        else:
+            logger.info('Skipping posting note %s - not updated recently',
+                        en_note.title)
     
     def sync(self, query):
         """Sync between WordPress site and notes matched by `query`.
