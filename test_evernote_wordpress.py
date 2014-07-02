@@ -24,6 +24,8 @@ class EvernoteNote(object):
             if self.content.lower().endswith('.xml'):
                 # it's a test-data filename, not actual content
                 self.content = self._get_content(self.content)
+        if 'updated' not in kwargs:
+            self.updated = 1404308967000
             
     def _get_content(self, fname):
         fpath = os.path.join('test-data', 'notes-content', fname)
@@ -146,7 +148,7 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         self.assertEqual('http://www.ostricher.com/images/test.png',
                          wp_image.link)
         self.assertEqual('Image caption', wp_image.caption)
-        self.assertIsNone(wp_image.date_created)
+        self.assertIsNone(wp_image.published_date)
         self.assertEqual('Description of test image',
                          wp_image.description)
         self.assertIsInstance(wp_image.parent, WordPressPost)
@@ -245,8 +247,8 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         self.assertListEqual(['Meta'], wp_post.categories)
         self.assertListEqual(['side-projects'], wp_post.tags)
         self.assertIsNone(wp_post.id)
-        self.assertIsNone(wp_post.date_created)
-        self.assertIsNone(wp_post.date_modified)
+        self.assertIsNone(wp_post.published_date)
+        self.assertIsNone(wp_post.last_modified)
         self.assertIsNone(wp_post.parent)
         self.assertIsNone(wp_post.thumbnail)
         expected_content_lines = [
@@ -380,7 +382,7 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
         self.adaptor.post_to_wordpress_from_note(note.guid)
         self.assertEqual(792, wp_image.id)
         self.assertEqual(datetime(2014, 7, 1, 9, 45, 12),
-                         wp_image.date_modified)
+                         wp_image.last_modified)
         expected_note = EvernoteNote(
             guid='abcd1234-1212-4040-2121-abcd1234abcd',
             title='new-image.png',

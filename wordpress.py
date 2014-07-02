@@ -34,7 +34,7 @@ class WordPressAttribute(object):
         """
         if attr_name in ('slug',):
             return WordPressSlugAttribute(value, wp_item)
-        elif attr_name in ('date_modified', 'date_created'):
+        elif attr_name in ('last_modified', 'published_date'):
             return WordPressDateTimeAttribute(value, wp_item)
         else:
             return WordPressAttribute(value, wp_item)
@@ -179,8 +179,8 @@ class WordPressItem(object):
     link = wp_property('link')
     parent = wp_property('parent')
     caption = wp_property('caption')
-    date_created = wp_property('date_created')
-    date_modified = wp_property('date_modified')
+    published_date = wp_property('published_date')
+    last_modified = wp_property('last_modified')
     description = wp_property('description')
     thumbnail = wp_property('thumbnail')
     project = wp_property('project')
@@ -232,7 +232,7 @@ class WordPressItem(object):
             assert(self.id is not None)
             xml_post = wp_wrapper.get_post(self.id)
         # TODO: use attributes dictionary to do this automatically
-        self.date_modified = xml_post.date_modified
+        self.last_modified = xml_post.date_modified
         self.link = xml_post.link
 
 class WordPressImageAttachment(WordPressItem):

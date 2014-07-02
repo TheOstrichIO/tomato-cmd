@@ -479,7 +479,8 @@ class EvernoteWordpressAdaptor(object):
         # Create a WordPress item from note
         #: :type wp_item: WordPressItem
         wp_item = self.wp_item_from_note(en_note)
-        if wp_item.date_modified and note_updated > wp_item.date_modified:
+        if (wp_item.last_modified is None or
+            (wp_item.last_modified and note_updated > wp_item.last_modified)):
             # Post the item
             self.create_wordpress_stub_from_note(wp_item, en_note)
             for ref_wp_item in wp_item.ref_items:
@@ -512,7 +513,8 @@ class EvernoteWordpressAdaptor(object):
         """
         attrs_to_update = {'id': '&lt;auto&gt;',
                            'link': '&lt;auto&gt;',
-                           'date_modified': '&lt;auto&gt;', }
+                           'last_modified': '&lt;auto&gt;',
+                           'published_date':  '&lt;auto&gt;',}
         for _, note_meta in self.evernote.get_notes_by_query(query):
             note = self.evernote.getNote(note_meta.guid,
                                          with_resource_data=False)
@@ -575,7 +577,7 @@ class EvernoteWordpressAdaptor(object):
         """
         # TODO: get authoritative attributes from WordPress class
         attrs_to_update = {'id': str(item.id), }
-        for attr in ['link', 'date_modified']:
+        for attr in ['link', 'last_modified']:
             if attr in item._wp_attrs and isinstance(item._wp_attrs[attr],
                                                      WordPressAttribute):
                 attrs_to_update[attr] = item._wp_attrs[attr].str()

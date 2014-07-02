@@ -10,7 +10,7 @@ title=New project note
 <div>tags="Multiword, Tag",test-tag</div>
 <div>project=<a href="evernote:///view/123/s123/abcd1234-aaaa-0000-ffff-abcd1234abcd/abcd1234-aaaa-0000-ffff-abcd1234abcd/" style="color: rgb(105, 170, 53);">Project index</a></div>
 <div>link=&lt;auto&gt;</div>
-<div>date_modified=&lt;auto&gt;</div>
+<div>last_modified=&lt;auto&gt;</div>
 <div><br/></div>
 <div>
 <hr/></div>
