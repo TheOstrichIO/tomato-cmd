@@ -473,7 +473,7 @@ class EvernoteWordpressAdaptor(object):
             logger.info('Posting note "%s" (GUID %s)', note.title, note.guid)
             try:
                 self.post_to_wordpress_from_note(note.guid)
-            except RuntimeError:
+            except Exception:
                 logger.exception('Failed posting note "%s" (GUID %s)',
                                  note.title, note.guid)
     
