@@ -11,6 +11,7 @@ title=Test Post with Title out of Div and = Symbol
 <div>tags="Multiword, Tag",test-tag</div>
 <div>thumbnail=<a href="evernote:///view/123/s123/abcd1234-1234-abcd-1234-abcd1234abcd/abcd1234-1234-abcd-1234-abcd1234abcd/" style="color: rgb(105, 170, 53);">test-thumb.png</a></div>
 <div>hemingwayapp-grade=8</div>
+<div>last_modified=2014-07-03 09:34:13</div>
 <div><br/></div>
 <div>
 <hr/></div>

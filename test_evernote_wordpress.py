@@ -323,7 +323,7 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
     @patch('common.logging')
     def setUp(self, mock_logging, mock_init_wp_client, mock_init_en_client):
         super(TestEvernoteWordPressPublisher, self).setUp()
-        wordpress_evernote.logger = MagicMock()
+        wordpress_evernote.logger = self.wp_en_logger = MagicMock()
         self.evernote = EvernoteApiWrapper(token='123')
         self.evernote.getNote = MagicMock(side_effect=mocked_get_note)
         self.evernote.updateNote = MagicMock()
@@ -396,6 +396,13 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
         self.wordpress.edit_post.assert_has_calls(
             [call(self.wordpress.get_post.return_value),
              call(self.wordpress.get_post.return_value)])
+    
+    def test_publish_up_to_date_post(self):
+        note = test_notes['note-with-id-thumbnail-attached-image-body-link']
+        self.adaptor.post_to_wordpress_from_note(note.guid)
+        self.wp_en_logger.info.assert_called_with(
+            'Skipping posting note %s - not updated recently',
+            'Test post note')
     
     def test_publish_new_note_with_new_thumbnail(self):
         pass
