@@ -79,7 +79,7 @@ test_notes = {
     'image-noid-existing-parent':
     EvernoteNote(
         guid='abcd1234-1212-4040-2121-abcd1234abcd',
-        title='new-image.png <auto>',
+        title='new-image.png',
         notebookGuid='abcd1234-5678-cdef-7890-abcd1234abcd',
         content='image-no-id.xml',
         resources=[MagicMock()]),
@@ -404,5 +404,7 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
             'Skipping posting note %s - not updated recently',
             'Test post note')
     
-    def test_publish_new_note_with_new_thumbnail(self):
-        pass
+    @unittest.skip('http://wordpress.stackexchange.com/questions/152796')
+    def test_publish_not_up_do_date_image(self):
+        note = test_notes['image-with-id']
+        self.adaptor.post_to_wordpress_from_note(note.guid)
