@@ -403,8 +403,24 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
         self.wp_en_logger.info.assert_called_with(
             'Skipping posting note %s - not updated recently',
             'Test post note')
+        self.assertIsNone(self.adaptor.cache[note.guid].published_date)
     
     @unittest.skip('http://wordpress.stackexchange.com/questions/152796')
     def test_publish_not_up_do_date_image(self):
         note = test_notes['image-with-id']
         self.adaptor.post_to_wordpress_from_note(note.guid)
+    
+    def test_publish_published_note(self):
+        self.wordpress.edit_post = MagicMock(return_value=True)
+        self.wordpress.get_post = MagicMock(
+            return_value=WordpressXmlRpcItem(
+                id=544, link='http://www.ostricher.com/?id=544',
+                date=datetime(2014, 7, 7, 9, 45, 12),
+                date_modified=datetime(2014, 7, 7, 9, 45, 12)))
+        note = test_notes['note-with-id-thumbnail-attached-image-body-link']
+        note.updated = 1404508967000
+        self.adaptor.post_to_wordpress_from_note(note.guid)
+        self.assertEqual(datetime(2014, 7, 7, 9, 45, 12),
+                         self.adaptor.cache[note.guid].last_modified)
+        self.assertEqual(datetime(2014, 7, 7, 9, 45, 12),
+                         self.adaptor.cache[note.guid].published_date)
