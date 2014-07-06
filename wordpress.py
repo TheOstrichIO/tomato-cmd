@@ -233,6 +233,9 @@ class WordPressItem(object):
             xml_post = wp_wrapper.get_post(self.id)
         # TODO: use attributes dictionary to do this automatically
         self.last_modified = xml_post.date_modified
+        if 'publish' == xml_post.post_status and self.published_date is None:
+            # first publish
+            self.published_date = xml_post.date
         self.link = xml_post.link
 
 class WordPressImageAttachment(WordPressItem):

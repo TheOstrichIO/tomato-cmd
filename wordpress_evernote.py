@@ -577,9 +577,10 @@ class EvernoteWordpressAdaptor(object):
         """
         # TODO: get authoritative attributes from WordPress class
         attrs_to_update = {'id': str(item.id), }
-        for attr in ['link', 'last_modified']:
-            if attr in item._wp_attrs and isinstance(item._wp_attrs[attr],
-                                                     WordPressAttribute):
+        for attr in ['link', 'last_modified', 'published_date']:
+            if (attr in item._wp_attrs and isinstance(item._wp_attrs[attr],
+                                                      WordPressAttribute) and
+                item._wp_attrs[attr].fget() is not None):
                 attrs_to_update[attr] = item._wp_attrs[attr].str()
         self.update_note_metdata(note, attrs_to_update)
 

@@ -346,7 +346,8 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
         self.wordpress.get_post = MagicMock(
             return_value=WordpressXmlRpcItem(
                 id=660, link='http://www.ostricher.com/project-note',
-                date_modified=datetime(2014, 7, 1, 9, 45, 12)))
+                date_modified=datetime(2014, 7, 1, 9, 45, 12),
+                post_status='draft'))
         note = test_notes['project-note-noid']
         wp_post = self.adaptor.wp_item_from_note(note.guid)
         self.assertIsInstance(wp_post, WordPressPost)
@@ -371,7 +372,8 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
         self.wordpress.get_post = MagicMock(
             return_value=WordpressXmlRpcItem(
                 id=792, link='http://www.ostricher.com/images/new-test.png',
-                date_modified=datetime(2014, 7, 1, 9, 45, 12)))
+                date_modified=datetime(2014, 7, 1, 9, 45, 12),
+                post_status='draft'))
         self.wordpress.edit_post = MagicMock(return_value=True)
         note = test_notes['image-noid-existing-parent']
         wp_image = self.adaptor.wp_item_from_note(note.guid)
@@ -399,11 +401,11 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
     
     def test_publish_up_to_date_post(self):
         note = test_notes['note-with-id-thumbnail-attached-image-body-link']
+        note.updated = 1404308967000
         self.adaptor.post_to_wordpress_from_note(note.guid)
         self.wp_en_logger.info.assert_called_with(
             'Skipping posting note %s - not updated recently',
             'Test post note')
-        self.assertIsNone(self.adaptor.cache[note.guid].published_date)
     
     @unittest.skip('http://wordpress.stackexchange.com/questions/152796')
     def test_publish_not_up_do_date_image(self):
@@ -416,7 +418,8 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
             return_value=WordpressXmlRpcItem(
                 id=544, link='http://www.ostricher.com/?id=544',
                 date=datetime(2014, 7, 7, 9, 45, 12),
-                date_modified=datetime(2014, 7, 7, 9, 45, 12)))
+                date_modified=datetime(2014, 7, 7, 9, 45, 12),
+                post_status='publish'))
         note = test_notes['note-with-id-thumbnail-attached-image-body-link']
         note.updated = 1404508967000
         self.adaptor.post_to_wordpress_from_note(note.guid)
