@@ -219,7 +219,7 @@ class EvernoteWordpressAdaptor(object):
     
     @classmethod
     def _get_attr_groupdict(cls, attr_name, string):
-        m = cls._get_attr_matcher(attr_name).match(string)
+        m = cls._get_attr_matcher(attr_name).search(string)
         if m:
             d = m.groupdict()
             d['attr'] = d['attr'].strip()
@@ -511,10 +511,10 @@ class EvernoteWordpressAdaptor(object):
         
         :param query: Evernote query used to find notes to detach.
         """
-        attrs_to_update = {'id': '&lt;auto&gt;',
-                           'link': '&lt;auto&gt;',
-                           'last_modified': '&lt;auto&gt;',
-                           'published_date':  '&lt;auto&gt;',}
+        attrs_to_update = {'id': '<auto>',
+                           'link': '<auto>',
+                           'last_modified': '<auto>',
+                           'published_date':  '<auto>',}
         for _, note_meta in self.evernote.get_notes_by_query(query):
             note = self.evernote.getNote(note_meta.guid,
                                          with_resource_data=False)
@@ -532,29 +532,49 @@ class EvernoteWordpressAdaptor(object):
         :param attrs_to_update: Dictionary of attributes to update.
         :type attrs_to_update: dict
         """
+        global modified_flag
         modified_flag = False
-        content_lines = note.content.split('\n')
-        for linenum, line in enumerate(content_lines):
-            if self._hr_matcher.search(line):
+        root = self._parse_xml_from_string(note.content)
+        def update_node_text(orig_text):
+            # Extract attribute name from element
+            text = orig_text and orig_text.strip(' \n\r') or ''
+            if not text:
+                return orig_text
+            if text.startswith('#'):
+                return orig_text
+            if '=' not in text:
+                return orig_text
+            pos = text.find('=')
+            attr_name = text[:pos]
+            # Update if needed
+            if attr_name in attrs_to_update:
+                current_val = text[pos+1:].strip(' \n\r')
+                new_val = attrs_to_update[attr_name]
+                if new_val == current_val:
+                    logger.debug('No change in attribute "%s"', attr_name)
+                else:
+                    logger.debug('Changing note attribute "%s" from "%s" '
+                                 'to "%s"', attr_name,
+                                 current_val, new_val)
+                    global modified_flag
+                    modified_flag = True
+                    return '%s=%s' % (attr_name, new_val)
+            return orig_text
+        for e in root.iter():
+            if e.tag in ('hr', ):
                 # <hr /> tag means end of metadata section
                 break
-            for attr, new_val in attrs_to_update.iteritems():
-                d = self._get_attr_groupdict(attr, line)
-                if d:
-                    current_val = d['value'].strip()
-                    if new_val == current_val:
-                        logger.debug('No change in attribute "%s"', attr)
-                    else:
-                        logger.debug('Changing note attribute "%s" from "%s" '
-                                     'to "%s"', attr, current_val, new_val)
-                        attr_str = d['attr']
-                        content_lines[linenum] = line.replace(
-                            attr_str, '%s=%s' % (attr, new_val))
-                        modified_flag = True
+            if e.tag in ('div', 'p',):
+                e.text = update_node_text(e.text)
+            e.tail = update_node_text(e.tail)
         # TODO: if metadata field doesn't exist - create one?
         if modified_flag:
             logger.info('Writing modified content back to note')
-            note.content = '\n'.join(content_lines)
+            note.content = '\n'.join([
+                '<?xml version="1.0" encoding="UTF-8" standalone="no"?>',
+                '<!DOCTYPE en-note SYSTEM '
+                '"http://xml.evernote.com/pub/enml2.dtd">',
+                ET.tostring(root)])
             self.evernote.updateNote(note)
         else:
             logger.info('No changes to note content')

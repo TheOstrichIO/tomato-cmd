@@ -102,16 +102,7 @@ def mocked_get_note(guid):
         if note.guid == guid:
             return note
 
-class TestEvernoteWordPressParser(unittest.TestCase):
-    
-    @patch('my_evernote.EvernoteApiWrapper._init_en_client')
-    def setUp(self, mock_init_en_client):
-        wordpress.logger = Mock()
-        wordpress_evernote.logger = Mock()
-        self.evernote = EvernoteApiWrapper(token='123')
-        self.evernote.getNote = MagicMock(side_effect=mocked_get_note)
-        self.adaptor = EvernoteWordpressAdaptor(self.evernote, None)
-    
+class ElementTreeEqualExtension(unittest.TestCase):
     def assertElementTreeEqual(self, root1, root2, msg=None):
         """Helper method to compare ElementTree objects."""
         def norm_text(text):
@@ -125,6 +116,22 @@ class TestEvernoteWordPressParser(unittest.TestCase):
         self.assertEqual(len(root1), len(root2), msg)
         for e1, e2 in zip(root1, root2):
             self.assertElementTreeEqual(e1, e2, msg)
+            
+    def assertETfromStrEqual(self, str1, str2, msg=None):
+        adaptor_class = wordpress_evernote.EvernoteWordpressAdaptor
+        parser = adaptor_class._parse_xml_from_string
+        root1 = parser(str1)
+        root2 = parser(str2)
+        self.assertElementTreeEqual(root1, root2, msg)
+
+class TestEvernoteWordPressParser(ElementTreeEqualExtension):
+    @patch('my_evernote.EvernoteApiWrapper._init_en_client')
+    def setUp(self, mock_init_en_client):
+        wordpress.logger = Mock()
+        wordpress_evernote.logger = Mock()
+        self.evernote = EvernoteApiWrapper(token='123')
+        self.evernote.getNote = MagicMock(side_effect=mocked_get_note)
+        self.adaptor = EvernoteWordpressAdaptor(self.evernote, None)
     
     def test_evernote_wpitem_normalize(self):
         note = test_notes['note-with-id-thumbnail-attached-image-body-link']
@@ -288,8 +295,8 @@ class TestNoteMetadataAttrMatching(unittest.TestCase):
     def test_note_metadata_attr_non_matching(self):
         non_matches = [
             'let me say something about id=13',
-            'why <div>id=45 is my friend</div> bla',
-            'a sentence about <div>id=5</div>']
+            'why <div id=45 is my friend</div> bla',
+            'a sentence about <div id=5</div>']
         for test_string in non_matches:
             self.assertIsNone(
                 EvernoteWordpressAdaptor._get_attr_groupdict('id',
@@ -306,7 +313,7 @@ id = 2
 <div>id=&lt;auto&gt;</div>
 <!-- Items that should not match -->
 let me say something about id=13',
-a sentence about <div>id=5</div>
+a sentence about <div id=5
 """
         expected_attr_matches = ['1', '2', '3', '&lt;auto&gt;']
         matches = list()
@@ -316,7 +323,7 @@ a sentence about <div>id=5</div>
                 matches.append(d['value'])
         self.assertListEqual(expected_attr_matches, matches)
 
-class TestEvernoteWordPressPublisher(unittest.TestCase):
+class TestEvernoteWordPressPublisher(ElementTreeEqualExtension):
     
     @patch('my_evernote.EvernoteApiWrapper._init_en_client')
     @patch('wordpress.WordPressApiWrapper._init_wp_client')
@@ -360,8 +367,7 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
             title='New project note',
             notebookGuid='abcd1234-5678-1928-7890-abcd1234abcd',
             content='published-project-note.xml')
-        self.assertListEqual(expected_note.content.split('\n'),
-                             note.content.split('\n'))
+        self.assertETfromStrEqual(expected_note.content, note.content)
         self.evernote.updateNote.assert_has_calls(
             [call(note),    # once for the stub creation
              call(note)])   # once for metadata update
@@ -390,8 +396,7 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
             title='new-image.png',
             notebookGuid='abcd1234-5678-1928-7890-abcd1234abcd',
             content='uploaded-image.xml')
-        self.assertListEqual(expected_note.content.split('\n'),
-                             note.content.split('\n'))
+        self.assertETfromStrEqual(expected_note.content, note.content)
         self.evernote.updateNote.assert_has_calls([call(note), call(note)])
         self.assertTrue(self.wordpress.upload_file.called)
         self.wordpress.get_post.assert_has_calls([call(792), call(792)])
@@ -427,3 +432,35 @@ class TestEvernoteWordPressPublisher(unittest.TestCase):
                          self.adaptor.cache[note.guid].last_modified)
         self.assertEqual(datetime(2014, 7, 7, 9, 45, 12),
                          self.adaptor.cache[note.guid].published_date)
+
+class TestEvernoteDetach(ElementTreeEqualExtension):
+    @patch('my_evernote.EvernoteApiWrapper._init_en_client')
+    @patch('wordpress.WordPressApiWrapper._init_wp_client')
+    @patch('common.logging')
+    def setUp(self, mock_logging, mock_init_wp_client, mock_init_en_client):
+        super(TestEvernoteDetach, self).setUp()
+        wordpress_evernote.logger = self.wp_en_logger = MagicMock()
+        self.evernote = EvernoteApiWrapper(token='123')
+        self.evernote.getNote = MagicMock(side_effect=mocked_get_note)
+        self.evernote.updateNote = MagicMock()
+        self.wordpress = WordPressApiWrapper('xmlrpc.php', 'user', 'password')
+        self.adaptor = EvernoteWordpressAdaptor(self.evernote, self.wordpress)
+    
+    def test_(self):
+        note_to_detach = EvernoteNote(
+            guid='abcd1234-0011-2233-4455-abcd1234abcd',
+            title='',
+            notebookGuid='abcd1234-5678-1928-7890-abcd1234abcd',
+            content='note-to-detach.xml')
+        attrs_to_update = {'id': '<auto>',
+                           'link': '<auto>',
+                           'last_modified': '<auto>',
+                           'published_date':  '<auto>',}
+        self.adaptor.update_note_metdata(note_to_detach, attrs_to_update)
+        expected_detached_note = EvernoteNote(
+            guid='abcd1234-0011-2233-4455-abcd1234abcd',
+            title='',
+            notebookGuid='abcd1234-5678-1928-7890-abcd1234abcd',
+            content='note-detached.xml')
+        self.assertETfromStrEqual(expected_detached_note.content,
+                                  note_to_detach.content)
