@@ -197,35 +197,6 @@ class WpEnContent(WpEnAttribute):
 class EvernoteWordpressAdaptor(object):
     """Evernote-Wordpress Adaptor class."""
     
-    _attr_pattern = ('(\A|\s*\<\w+\>)\s*(?P<attr>{attr_name}\s*\=\s*'
-                    '(?P<value>[^\<]+))\s*(\Z|\<\/\w+\>\s*)')
-    _attr_matchers_cache = dict()
-    _hr_matcher = re.compile('\<hr\s*\/?\>', re.IGNORECASE)
-    
-    @classmethod
-    def _get_attr_matcher(cls, attr_name):
-        """Return a compiled RegEx matcher for metadata attributes"""
-        if attr_name in cls._attr_matchers_cache:
-            return cls._attr_matchers_cache[attr_name]
-        # RegEx for finding metadata attributes
-        # - <attr-name> in beginning of line or immediately following <..> tag
-        # - "=" after <attr-name>, optionally with whitespaces around it
-        # - <value> after the "=" up to end of line or closing </..> tag,
-        #   where value may contain alphanumeric, "&", or ";".
-        matcher = re.compile(cls._attr_pattern.format(attr_name=attr_name),
-                             re.IGNORECASE)
-        cls._attr_matchers_cache[attr_name] = matcher
-        return matcher
-    
-    @classmethod
-    def _get_attr_groupdict(cls, attr_name, string):
-        m = cls._get_attr_matcher(attr_name).search(string)
-        if m:
-            d = m.groupdict()
-            d['attr'] = d['attr'].strip()
-            d['value'] = d['value'].strip()
-            return d
-    
     @staticmethod
     def _parse_xml_from_string(xml_string):
         """Return parsed ElementTree from xml_string."""

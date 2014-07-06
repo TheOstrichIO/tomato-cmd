@@ -274,55 +274,6 @@ class TestEvernoteWordPressParser(ElementTreeEqualExtension):
         self.assertEqual('This is the index page for "The Ostrich" website '
                          'project.', project.content)
 
-class TestNoteMetadataAttrMatching(unittest.TestCase):
-    
-    def setUp(self):
-        super(TestNoteMetadataAttrMatching, self).setUp()
-        self.id_matcher = EvernoteWordpressAdaptor._get_attr_matcher('id')
-    
-    def test_note_metadata_attr_matching(self):
-        matches = [
-            ('id=123', 'id=123', '123'),
-            ('<div>id=123</div>', 'id=123', '123'),
-            (' id = 123 ', 'id = 123', '123'),
-            (' <div>    id    =    123    </div> ', 'id    =    123', '123'),]
-        for test_string, exp_attr, exp_v in matches:
-            d = EvernoteWordpressAdaptor._get_attr_groupdict('id', test_string)
-            self.assertIsNotNone(
-                d, 'Did not match anything in "%s"' % test_string)
-            self.assertDictEqual({'attr': exp_attr, 'value': exp_v}, d)
-    
-    def test_note_metadata_attr_non_matching(self):
-        non_matches = [
-            'let me say something about id=13',
-            'why <div id=45 is my friend</div> bla',
-            'a sentence about <div id=5</div>']
-        for test_string in non_matches:
-            self.assertIsNone(
-                EvernoteWordpressAdaptor._get_attr_groupdict('id',
-                                                             test_string))
-    
-    def test_note_metadata_attr_searching(self):
-        attrs_string = """<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
-<div>
-<!-- Items that should match -->
-<div>id=1</div>
-id = 2
- <div>    id    =    3    </div> 
-<div>id=&lt;auto&gt;</div>
-<!-- Items that should not match -->
-let me say something about id=13',
-a sentence about <div id=5
-"""
-        expected_attr_matches = ['1', '2', '3', '&lt;auto&gt;']
-        matches = list()
-        for line in attrs_string.split('\n'):
-            d = EvernoteWordpressAdaptor._get_attr_groupdict('id', line)
-            if d:
-                matches.append(d['value'])
-        self.assertListEqual(expected_attr_matches, matches)
-
 class TestEvernoteWordPressPublisher(ElementTreeEqualExtension):
     
     @patch('my_evernote.EvernoteApiWrapper._init_en_client')
