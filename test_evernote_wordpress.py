@@ -397,7 +397,7 @@ class TestEvernoteDetach(ElementTreeEqualExtension):
         self.wordpress = WordPressApiWrapper('xmlrpc.php', 'user', 'password')
         self.adaptor = EvernoteWordpressAdaptor(self.evernote, self.wordpress)
     
-    def test_(self):
+    def test_eekie_detach(self):
         note_to_detach = EvernoteNote(
             guid='abcd1234-0011-2233-4455-abcd1234abcd',
             title='',
