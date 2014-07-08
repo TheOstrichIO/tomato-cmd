@@ -64,6 +64,7 @@ class WpEnListAttribute(WpEnAttribute):
         """
         super(WpEnListAttribute, self).__init__('', wp_item, adaptor)
         self._value = self._parse_values_from_string(value)
+        self._original_str = value
     
     @staticmethod
     def _parse_values_from_string(valstring):
@@ -73,6 +74,9 @@ class WpEnListAttribute(WpEnAttribute):
         # out: ['val1', 'val2', 'val3-hi', 'val 4, quoted'] (4 items)
         return reduce(lambda x, y: x + y,
                       list(csv.reader([valstring], skipinitialspace=True)))
+    
+    def str(self):
+        return self._original_str
 
 class WpEnLinkAttribute(WpEnAttribute):
     """WordPress item link attribute."""
@@ -111,6 +115,7 @@ class WpEnLinkAttribute(WpEnAttribute):
         if not self._href:
             raise NoteParserError('Link "%s" has no href' %
                                   (ET.tostring(a_node)))
+        self._a_node = a_node
         self._text = a_node.text
         self._ref_item = None
         super(WpEnLinkAttribute, self).__init__(self._href, wp_item, adaptor)
@@ -122,6 +127,9 @@ class WpEnLinkAttribute(WpEnAttribute):
             return self._ref_item
         else:
             return self._href
+    
+    def str(self):
+        return ET.tostring(self._a_node)
 
 class WpEnContent(WpEnAttribute):
     """WordPress content attribute from Evernote note."""
@@ -193,6 +201,9 @@ class WpEnContent(WpEnAttribute):
         # currently supporting only markdown rendering of content node
         assert('markdown' == self._wp_item.content_format)
         return self._render_node_as_markdown()
+    
+    def str(self):
+        return ET.tostring(self._content_node)
 
 class EvernoteWordpressAdaptor(object):
     """Evernote-Wordpress Adaptor class."""
@@ -574,6 +585,54 @@ class EvernoteWordpressAdaptor(object):
                 item._wp_attrs[attr].fget() is not None):
                 attrs_to_update[attr] = item._wp_attrs[attr].str()
         self.update_note_metdata(note, attrs_to_update)
+    
+    def wp_item_to_dom(self, wp_item):
+        """Return an ElementTree root of a DOM representation of the item.
+        
+        :type wp_item: wordpress.WordPressItem
+        """
+        root = self._parse_xml_from_string(
+            '<en-note style="word-wrap: break-word; -webkit-nbsp-mode: space; '
+            '-webkit-line-break: after-white-space;"></en-note>')
+        type_div = ET.SubElement(root, 'div')
+        type_div.text = 'type=%s' % wp_item.type_name()
+        for attr_name in wp_item.definition:
+            if isinstance(attr_name, tuple):
+                en_name, attr_name = attr_name
+            else:
+                en_name = attr_name
+            attr = wp_item._wp_attrs.get(attr_name)
+            if attr and isinstance(attr, WordPressAttribute):
+                #: :type attr: wordpress.WordPressAttribute
+                div = ET.SubElement(root, 'div')
+                div.text = '%s=%s' % (en_name, attr.str())
+        if 'content' in wp_item._wp_attrs:
+            ET.SubElement(root, 'hr')
+            root.append(wp_item['content']._content_node)
+        return root
+    
+    def backup_comments(self, query, notebook):
+        """Backup comments for post notes matched by `query` in Evernote.
+        
+        :param query: Evernote query used to find post notes.
+        :param notebook: Name of Evernote notebook to store comment notes.
+        """
+        for _, note_meta in self.evernote.get_notes_by_query(query):
+            note = self.evernote.getNote(note_meta.guid,
+                                         with_resource_data=False)
+            logger.info('Backing up comments for post note "%s" (GUID %s)',
+                        note.title, note.guid)
+            wp_item = self.wp_item_from_note(note.guid)
+            if not wp_item.id:
+                logger.info('Skipping post note %s (no ID set)', note.title)
+                continue
+            for wp_comment in self.wordpress.get_post_comments(wp_item.id):
+                #: :type wp_comment: wordpress.WordPressComment
+                comment_note_title = '%s: Comment #%d' % \
+                                     (wp_comment.post.title, wp_comment.id)
+                comment_note_dom = self.wp_item_to_dom(wp_comment)
+                self.evernote.create_or_update_note_by_title(
+                    comment_note_title, notebook, comment_note_dom)
 
 def save_wp_image_to_evernote(en_wrapper, notebook_name, wp_image,
                               force=False):
@@ -646,6 +705,17 @@ detach_parser.add_argument('query',
                            help='Evernote query for notes to detach')
 detach_parser.set_defaults(func=lambda  adaptor, args:
                            adaptor.detach(args.query))
+
+backup_comments_parser = subparsers.add_parser(
+   'backup-comments',
+   help='Backup comments to Evernote for post notes matching a query')
+backup_comments_parser.add_argument('query',
+                                    help='Evernote query for post notes')
+backup_comments_parser.add_argument('--notebook',
+                                    help='Evernote notebook for comment notes')
+backup_comments_parser.set_defaults(func=lambda  adaptor, args:
+                                    adaptor.backup_comments(args.query,
+                                                            args.notebook))
 
 ###############################################################################
 

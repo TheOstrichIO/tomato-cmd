@@ -8,6 +8,7 @@ import binascii
 import hashlib
 from string import Template
 from collections import namedtuple
+from xml.etree import ElementTree as ET
 
 #Evernote API:
 from evernote.api.client import EvernoteClient
@@ -267,3 +268,25 @@ class EvernoteApiWrapper():
                                         False, False)
         self._cache[note_guid] = note
         return note
+    
+    def create_or_update_note_by_title(self, title, notebook, content_or_dom):
+        """
+        """
+        if isinstance(content_or_dom, basestring):
+            content = content_or_dom
+        elif isinstance(content_or_dom, ET.Element):
+            content = '\n'.join([
+                '<?xml version="1.0" encoding="UTF-8" standalone="no"?>',
+                '<!DOCTYPE en-note SYSTEM '
+                '"http://xml.evernote.com/pub/enml2.dtd">',
+                ET.tostring(content_or_dom)])
+        else:
+            raise TypeError('Invalid content type %s', type(content_or_dom))
+        note = self.getSingleNoteByTitle(title, notebook)
+        if note:
+            note.content = content
+            self.updateNote(note)
+        else:
+            note = Types.Note(title=title)
+            note.content = content
+            self.saveNoteToNotebook(note, notebook)

@@ -14,7 +14,7 @@ from wordpress_xmlrpc import WordPressPage as XmlRpcPage
 from wordpress_xmlrpc.compat import xmlrpc_client
 #from wordpress_xmlrpc.methods.posts import GetPosts, NewPost
 #from wordpress_xmlrpc.methods.users import GetUserInfo
-from wordpress_xmlrpc.methods import media, posts
+from wordpress_xmlrpc.methods import media, posts, comments
 
 import slugify
 
@@ -185,6 +185,13 @@ class WordPressItem(object):
     thumbnail = wp_property('thumbnail')
     project = wp_property('project')
     hemingway_grade = wp_property('hemingway_grade')
+    comment_status = wp_property('comment_status')
+    author_email = wp_property('author_email')
+    author_url = wp_property('author_url')
+    author_ip = wp_property('author_ip')
+    user = wp_property('user')
+    
+    definition = list()
     
     def set_wp_attribute(self, attr, value):
         """Set a WordPress attribute `attr` on this instance to `value`."""
@@ -464,6 +471,26 @@ class WordPressPost(WordPressItem):
             raise RuntimeError('Failed updating WordPress post')
         self.update_auto_attributes(wp_wrapper)
 
+class WordPressComment(WordPressItem):
+    definition = [
+        #('type', 'post_type'),
+        'id',
+        'post',
+        ('reply_to', 'parent'),
+        'author',
+        'author_email',
+        'author_url',
+        'author_ip',
+        'user',
+        'comment_status',
+        'link',
+        'published_date',
+        ]
+    
+    def type_name(self):
+        return self.__class__.__name__.lower().replace('wordpress', '')
+        #return "comment"
+
 class WordPressApiWrapper(object):
     """WordPress client API wrapper class."""
     
@@ -478,6 +505,24 @@ class WordPressApiWrapper(object):
     
     def _init_wp_client(self, xmlrpc_url, username, password):
         self._wp = Client(xmlrpc_url, username, password)
+    
+    def wp_item_from_xmlrpc_object(self, xmlrpc_object, item_class):
+        """
+        """
+        xmlrpc_map = {
+            'comment_status': 'status',
+            }
+        wp_item = item_class() #: :type wp_item: WordPressItem
+        for attr in item_class.definition:
+            if isinstance(attr, tuple):
+                attr = attr[-1]
+            xmlrpc_attr = xmlrpc_map.get(attr, attr)
+            if hasattr(xmlrpc_object, xmlrpc_attr):
+                wp_item.set_wp_attribute(
+                    attr,
+                    WordPressAttribute.create(
+                        attr, getattr(xmlrpc_object, xmlrpc_attr), wp_item))
+        return wp_item
     
     def media_item_generator(self, parent_id=None):
         """Generates WordPress attachment objects."""
@@ -507,3 +552,10 @@ class WordPressApiWrapper(object):
     def upload_file(self, data):
         """Wrapper for invoking the upload file to the blog method."""
         return self._wp.call(media.UploadFile(data))
+    
+    def get_post_comments(self, post_id):
+        """Generate WordPressComment objects for post `post_id`."""
+        for xmlrpc_comment in self._wp.call(comments.GetComments(
+                                            {'post_id': post_id})):
+            yield self.wp_item_from_xmlrpc_object(xmlrpc_comment,
+                                                  WordPressComment)
