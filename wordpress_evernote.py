@@ -257,7 +257,7 @@ class EvernoteWordpressAdaptor(object):
                 else:
                     raise NoteParserError('Invalid stage "%s"' % (stage))
                 append_tail(tail)
-            elif tag in ('div', 'p', 'br'):
+            elif tag in ('en-note', 'div', 'p', 'br'):
                 p = ET.SubElement(get_active_node(), 'p')
                 if text:
                     p.text = text
@@ -309,8 +309,7 @@ class EvernoteWordpressAdaptor(object):
             bad_a.tag = 'br'
             bad_a.tail = tail
         # Parse all sub elements of main en-note
-        for e in root:
-            parse_node(e)
+        parse_node(root)
         # Clean up redundant empty p tags in normalized tree
         for top_level_div in norm_root:
             del_list = list()
@@ -321,8 +320,10 @@ class EvernoteWordpressAdaptor(object):
                 assert('p' == p.tag)
                 assert(not p.tail)
                 if (p.text or 0 < len(p)):
-                    prev_empty = False
-                    trailing_empty_list = list()
+                    if 'metadata' != top_level_div.attrib['id']:
+                        # in metadata div - don't allow empty p's!
+                        prev_empty = False
+                        trailing_empty_list = list()
                 else:
                     # Empty p - only one is allowed in between non-empty p's
                     if prev_empty:
