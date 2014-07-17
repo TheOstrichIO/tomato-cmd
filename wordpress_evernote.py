@@ -535,7 +535,7 @@ class EvernoteWordpressAdaptor(object):
             if e.tag in ('hr', ):
                 # <hr /> tag means end of metadata section
                 break
-            if e.tag in ('div', 'p',):
+            if e.tag in ('div', 'p', 'en-note',):
                 e.text = update_node_text(e.text)
             e.tail = update_node_text(e.tail)
         # TODO: if metadata field doesn't exist - create one?
