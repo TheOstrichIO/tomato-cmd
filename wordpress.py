@@ -318,12 +318,19 @@ class WordPressImageAttachment(WordPressItem):
         """
         if self.id is None:
             raise RuntimeError('Cannot update image without ID set.')
-        # The UploadFile method doesn't support setting parent ID,
-        # so we need to get the uploaded image as post item and edit it.
+        # The UploadFile method doesn't support setting parent ID, caption,
+        # and description, so we need to get the uploaded image as post item
+        # and edit it, remembering that internally Wordpress stores the
+        # descripiton as "post_content" and the caption as "post_excerpt".
+        # See also:
+        # - https://core.trac.wordpress.org/ticket/18684
+        # - https://core.trac.wordpress.org/ticket/21085
+        # - https://core.trac.wordpress.org/ticket/13917
         # TODO: refactor to parent property
         as_post = wp_wrapper.get_post(self.id)
-        for attr in ['title', 'caption', 'description']:
-            setattr(as_post, attr, getattr(self, attr))
+        as_post.title = self.title
+        as_post.content = self.description
+        as_post.excerpt = self.caption
         if self.parent and hasattr(self.parent, 'id'):
             as_post.parent_id = self.parent.id
         if not wp_wrapper.edit_post(as_post):
