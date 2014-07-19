@@ -362,7 +362,7 @@ class EvernoteWordpressAdaptor(object):
             return self.cache[guid]
         # not cached - parse and cache result
         if isinstance(note_link, basestring):
-            note = self.evernote.getNote(guid)
+            note = self.evernote.get_note(guid)
         wp_item = WordPressItem()
         wp_item._underlying_en_note = note
         self.cache[guid] = wp_item
@@ -444,7 +444,7 @@ class EvernoteWordpressAdaptor(object):
         """
         # Get note from Evernote
         #: :type en_note: evernote.edam.type.ttypes.Note
-        en_note = self.evernote.getNote(note_link)
+        en_note = self.evernote.get_note(note_link)
         # Convert Evernote timestamp (ms from epoch) to DateTime object
         # (http://dev.evernote.com/doc/reference/Types.html#Typedef_Timestamp)
         note_updated = datetime.fromtimestamp(en_note.updated/1000)
@@ -488,7 +488,7 @@ class EvernoteWordpressAdaptor(object):
                            'last_modified': '<auto>',
                            'published_date':  '<auto>',}
         for _, note_meta in self.evernote.get_notes_by_query(query):
-            note = self.evernote.getNote(note_meta.guid,
+            note = self.evernote.get_note(note_meta.guid,
                                          with_resource_data=False)
             logger.info('Detaching note "%s" (GUID %s)', note.title, note.guid)
             self.update_note_metdata(note, attrs_to_update)

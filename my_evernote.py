@@ -249,7 +249,7 @@ class EvernoteApiWrapper():
         self._note_store.updateNote(self._client.token, note)
     
     @ratelimit_wait_and_retry
-    def getNote(self, genlink, with_content=True, with_resource_data=True):
+    def get_note(self, genlink, with_content=True, with_resource_data=True):
         """Get Evernote Note object by GUID or generalized link.
         
         :param genlink: The requested note generalized link or GUID.

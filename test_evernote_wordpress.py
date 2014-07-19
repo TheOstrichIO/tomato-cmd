@@ -130,7 +130,7 @@ class TestEvernoteWordPressParser(ElementTreeEqualExtension):
         wordpress.logger = Mock()
         wordpress_evernote.logger = Mock()
         self.evernote = EvernoteApiWrapper(token='123')
-        self.evernote.getNote = MagicMock(side_effect=mocked_get_note)
+        self.evernote.get_note = MagicMock(side_effect=mocked_get_note)
         self.adaptor = EvernoteWordpressAdaptor(self.evernote, None)
     
     def test_evernote_wpitem_normalize(self):
@@ -283,7 +283,7 @@ class TestEvernoteWordPressPublisher(ElementTreeEqualExtension):
         super(TestEvernoteWordPressPublisher, self).setUp()
         wordpress_evernote.logger = self.wp_en_logger = MagicMock()
         self.evernote = EvernoteApiWrapper(token='123')
-        self.evernote.getNote = MagicMock(side_effect=mocked_get_note)
+        self.evernote.get_note = MagicMock(side_effect=mocked_get_note)
         self.evernote.updateNote = MagicMock()
         self.wordpress = WordPressApiWrapper('xmlrpc.php', 'user', 'password')
         self.adaptor = EvernoteWordpressAdaptor(self.evernote, self.wordpress)
@@ -392,7 +392,7 @@ class TestEvernoteDetach(ElementTreeEqualExtension):
         super(TestEvernoteDetach, self).setUp()
         wordpress_evernote.logger = self.wp_en_logger = MagicMock()
         self.evernote = EvernoteApiWrapper(token='123')
-        self.evernote.getNote = MagicMock(side_effect=mocked_get_note)
+        self.evernote.get_note = MagicMock(side_effect=mocked_get_note)
         self.evernote.updateNote = MagicMock()
         self.wordpress = WordPressApiWrapper('xmlrpc.php', 'user', 'password')
         self.adaptor = EvernoteWordpressAdaptor(self.evernote, self.wordpress)
