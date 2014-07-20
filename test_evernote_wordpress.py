@@ -441,3 +441,13 @@ class TestImageShortcodePostProcess(unittest.TestCase):
                      'No more content.']
         wordpress_evernote.WpEnContent.post_process_content_lines(test_lines)
         self.assertListEqual(exp_lines, test_lines)
+    
+    def test_prefix_suffix(self):
+        test_lines = [
+            '    [sb_easy_image ids="510" size="medium" columns="1" '
+            'link="Lightbox"], [sb_easy_image ids="502" size="medium" '
+            'columns="1" link="Lightbox"]    ']
+        exp_lines = ['    [sb_easy_image ids="510,502" size="medium" '
+                     'columns="2" link="Lightbox"]    ']
+        wordpress_evernote.WpEnContent.post_process_content_lines(test_lines)
+        self.assertListEqual(exp_lines, test_lines)
