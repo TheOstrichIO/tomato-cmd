@@ -332,6 +332,7 @@ class TestEvernoteWordPressPublisher(ElementTreeEqualExtension):
                 date_modified=datetime(2014, 7, 1, 9, 45, 12),
                 post_status='draft'))
         self.wordpress.edit_post = MagicMock(return_value=True)
+        self.evernote.get_resource_data = MagicMock()
         note = test_notes['image-noid-existing-parent']
         wp_image = self.adaptor.wp_item_from_note(note.guid)
         self.assertIsInstance(wp_image, WordPressImageAttachment)

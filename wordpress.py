@@ -276,6 +276,11 @@ class WordPressImageAttachment(WordPressItem):
     @property
     def image_data(self):
         """Image attachment binary data."""
+        if hasattr(self, '_cached_image_data'):
+            return self._cached_image_data
+        if hasattr(self, '_get_image_data'):
+            self._cached_image_data = self._get_image_data()
+            return self._cached_image_data
         return self._image_data
     
     @property

@@ -404,7 +404,8 @@ class EvernoteWordpressAdaptor(object):
                 logger.warning('Note has too many attached resources (%d). '
                                'Choosing the first one, arbitrarily.',
                                len(note.resources))
-            wp_item._image_data = resource.data.body
+            wp_item._get_image_data = lambda: \
+                self.evernote.get_resource_data(resource.guid)
             wp_item._image_mime = resource.mime
             logger.debug('Got image %s with mimetype %s',
                          note.title, wp_item.mimetype)
