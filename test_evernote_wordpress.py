@@ -423,7 +423,7 @@ class TestImageShortcodePostProcess(unittest.TestCase):
     
     def test_regex(self):
         test_lines = [
-            'Some content', '',
+            'Some content.', '',
             '[sb_easy_image ids="510" size="medium" columns="1" '
             'link="Lightbox"], [sb_easy_image ids="502" size="medium" '
             'columns="1" link="Lightbox"]', '',
