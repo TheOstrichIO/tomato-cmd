@@ -156,9 +156,12 @@ class WpEnContent(WpEnAttribute):
         for num, line in enumerate(content_lines):
             matches = sbsc_re.findall(line)
             if 1 < len(matches):
-                content_lines[num] = ('[sb_easy_image ids="%s" size="medium" '
-                                      'columns="%d" link="Lightbox"]' %
-                                      (','.join(matches), len(matches)))
+                new_shortcode = ('[sb_easy_image ids="%s" size="medium" '
+                                 'columns="%d" link="Lightbox"]' %
+                                 (','.join(matches), len(matches)))
+                content_lines[num] = re.sub('\[.*\]',
+                                            new_shortcode,
+                                            content_lines[num])
     
     def _render_node_as_markdown(self):
         if self._cached_rendered_content:
@@ -221,7 +224,8 @@ class EvernoteWordpressAdaptor(object):
         # Valid XML entities: quot, amp, apos, lt and gt.
         parser.parser.UseForeignDTD(True)
         parser.entity['nbsp'] = ' '
-        return ET.fromstring(xml_string, parser=parser)
+        return ET.fromstring(xml_string.replace(u'\xa0', u' ').encode('utf-8'),
+                             parser=parser)
     
     @staticmethod
     def _parse_note_xml(note_content):
