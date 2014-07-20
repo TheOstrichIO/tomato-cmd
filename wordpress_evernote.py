@@ -41,7 +41,7 @@ class WpEnAttribute(WordPressAttribute):
         :type node: xml.etree.ElementTree.Element
         :type wp_item: wordpress.WordPressItem
         """
-        if attr_name in ('categories', 'tags'):
+        if attr_name in ('categories', 'tags', 'seo_keywords'):
             return WpEnListAttribute(node.text, wp_item, adaptor)
         elif attr_name in ('parent', 'thumbnail', 'project'):
             return WpEnLinkAttribute(node, wp_item, adaptor)

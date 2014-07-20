@@ -185,6 +185,9 @@ class WordPressItem(object):
     thumbnail = wp_property('thumbnail')
     project = wp_property('project')
     hemingway_grade = wp_property('hemingway_grade')
+    seo_title = wp_property('seo_title')
+    seo_description = wp_property('seo_description')
+    seo_keywords = wp_property('seo_keywords', [])
     
     def set_wp_attribute(self, attr, value):
         """Set a WordPress attribute `attr` on this instance to `value`."""
@@ -449,6 +452,16 @@ class WordPressPost(WordPressItem):
             add_custom_field(post, 'project', self.project.id)
         if self.hemingway_grade:
             add_custom_field(post, 'hemingwayapp-grade', self.hemingway_grade)
+        # SEO fields, assuming All-In-One SEO Pack plugin, with my special
+        # protected-CF-exposing plugin to allow XML-RPC access to them.
+        if self.seo_title:
+            add_custom_field(post, '_aioseop_title', self.seo_title)
+        if self.seo_description:
+            add_custom_field(post, '_aioseop_description',
+                             self.seo_description)
+        if self.seo_keywords:
+            add_custom_field(post, '_aioseop_keywords',
+                             ','.join(self.seo_keywords))
         return post
     
     def xml_rpc_object(self):
