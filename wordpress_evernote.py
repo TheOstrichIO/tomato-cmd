@@ -443,7 +443,10 @@ class EvernoteWordpressAdaptor(object):
             wp_item.post_stub(self.wordpress)
             assert(wp_item.id)
             # Update ID in note
-            self.update_note_metdata(en_note, {'id': str(wp_item.id), })
+            attrs_to_update = {'id': str(wp_item.id),}
+            if wp_item.link:
+                attrs_to_update['link'] = str(wp_item.link)
+            self.update_note_metdata(en_note, attrs_to_update)
     
     def post_to_wordpress_from_note(self, note_link):
         """Create WordPress item from Evernote note,
