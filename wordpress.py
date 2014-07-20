@@ -307,7 +307,7 @@ class WordPressImageAttachment(WordPressItem):
             'bits': xmlrpc_client.Binary(self.image_data),
             }
         response = wp_wrapper.upload_file(data)
-        self.id = response.get('id')
+        self.id = int(response.get('id'))
         # update item attachment
         self.update_item(wp_wrapper)
     
