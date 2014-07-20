@@ -257,8 +257,8 @@ class WordPressImageAttachment(WordPressItem):
     
     def markdown_ref(self, context=None):
         if self.id:
-            return ('[gallery ids="%d" size="medium" columns="1" link="file"]'
-                    % (self.id))
+            return ('[sb_easy_image ids="%d" size="medium" columns="1" '
+                    'link="Lightbox"]' % (self.id))
 #         if self.link and self.id:
 #             imtag = '<a href="%s"><img src="%s" class="wp-image-%d" %s/>' \
 #                 '</a>' % (self.link, self.link, self.id,

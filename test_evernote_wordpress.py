@@ -260,9 +260,11 @@ class TestEvernoteWordPressParser(ElementTreeEqualExtension):
         self.assertIsNone(wp_post.thumbnail)
         expected_content_lines = [
             'Nothing to see here.', '',
-            '[gallery ids="277" size="medium" columns="1" link="file"]', '',
+            '[sb_easy_image ids="277" size="medium" columns="1" '
+            'link="Lightbox"]', '',
             'Hello.', '',
-            '[gallery ids="277" size="medium" columns="1" link="file"]', '',
+            '[sb_easy_image ids="277" size="medium" columns="1" '
+            'link="Lightbox"]', '',
             'Media tag in span '
             ]
         self.assertListEqual(expected_content_lines,
