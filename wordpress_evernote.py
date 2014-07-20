@@ -149,6 +149,10 @@ class WpEnContent(WpEnAttribute):
                 ref_item = self._adaptor.wp_item_from_note(href)
                 self._wp_item._ref_wp_items.add(ref_item)
     
+    @staticmethod
+    def post_process_content_lines(content_lines):
+        pass
+    
     def _render_node_as_markdown(self):
         if self._cached_rendered_content:
             return self._cached_rendered_content
@@ -185,6 +189,7 @@ class WpEnContent(WpEnAttribute):
                 line += render_line_element(e, line) or ''
                 line += e.tail or ''
             content_lines.append(line)
+        self.post_process_content_lines(content_lines)
         self._cached_rendered_content = '\n'.join(content_lines)
         return self._cached_rendered_content
     
