@@ -151,7 +151,14 @@ class WpEnContent(WpEnAttribute):
     
     @staticmethod
     def post_process_content_lines(content_lines):
-        pass
+        sbsc_re = re.compile(
+            '\[sb_easy_image ids\=\"(?P<id>\d+)\" size\=\"medium\" columns\=\"1\" link\=\"Lightbox\"\]')
+        for num, line in enumerate(content_lines):
+            matches = sbsc_re.findall(line)
+            if 1 < len(matches):
+                content_lines[num] = ('[sb_easy_image ids="%s" size="medium" '
+                                      'columns="%d" link="Lightbox"]' %
+                                      (','.join(matches), len(matches)))
     
     def _render_node_as_markdown(self):
         if self._cached_rendered_content:
