@@ -418,3 +418,25 @@ class TestEvernoteDetach(ElementTreeEqualExtension):
             content='note-detached.xml')
         self.assertETfromStrEqual(expected_detached_note.content,
                                   note_to_detach.content)
+
+class TestImageShortcodePostProcess(unittest.TestCase):
+    
+    def test_regex(self):
+        test_lines = [
+            'Some content', '',
+            '[sb_easy_image ids="510" size="medium" columns="1" '
+            'link="Lightbox"], [sb_easy_image ids="502" size="medium" '
+            'columns="1" link="Lightbox"]', '',
+            'Some more content.', '',
+            '[sb_easy_image ids="510" size="medium" columns="1" '
+            'link="Lightbox"]', '',
+            'No more content.']
+        exp_lines = ['Some content.', '',
+                     '[sb_easy_image ids="510,502" size="medium" columns="2" '
+                     'link="Lightbox"]', '',
+                     'Some more content.', '',
+                     '[sb_easy_image ids="510" size="medium" columns="1" '
+                     'link="Lightbox"]', '',
+                     'No more content.']
+        wordpress_evernote.WpEnContent.post_process_content_lines(test_lines)
+        self.assertListEqual(exp_lines, test_lines)
