@@ -399,15 +399,28 @@ class WordPressPost(WordPressItem):
         # TODO: bring categories, tags, author, thumbnail, content
         # TODO: bring hemingway-grade and content format custom fields
     
-    def as_xml_rpc_obj(self):
+    def as_xml_rpc_obj(self, orig_post=None):
         """Return XML RPC WordPress item representation of this instance,
-        with fields populated from the WP attributes of this instance."""
+        with fields populated from the WP attributes of this instance.
+        
+        :param orig_post: Existing WordPress post for this instance.
+        :type orig_post: XmlRpcPost
+        """
         post = self.xml_rpc_object()
         
+        def get_orig_custom_field(key):
+            for field in orig_post.custom_fields:
+                if field['key'] == key:
+                    return field
         def add_custom_field(post, key, val):
             if not hasattr(post, 'custom_fields'):
                 post.custom_fields = list()
-            post.custom_fields.append({'key': key, 'value': val})
+            custom_field = get_orig_custom_field(key)
+            if custom_field:
+                custom_field['value'] = val
+            else:
+                custom_field = {'key': key, 'value': val}
+            post.custom_fields.append(custom_field)
         def add_terms(post, tax_name, terms_names):
             if not hasattr(post, 'terms_names'):
                 post.terms_names = dict()
@@ -471,7 +484,7 @@ class WordPressPost(WordPressItem):
             raise RuntimeError('Cannot update post with no ID')
         if not self.is_postable:
             raise RuntimeError('Post instance not fully processed')
-        xmlrpc_obj = self.as_xml_rpc_obj()
+        xmlrpc_obj = self.as_xml_rpc_obj(wp_wrapper.get_post(self.id))
         if not wp_wrapper.edit_post(xmlrpc_obj):
             raise RuntimeError('Failed updating WordPress post')
         self.update_auto_attributes(wp_wrapper)
