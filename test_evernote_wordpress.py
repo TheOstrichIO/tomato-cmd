@@ -2,6 +2,7 @@ import unittest
 from mock import patch, Mock, MagicMock, call
 import os
 from datetime import datetime
+import codecs
 
 import wordpress
 import wordpress_evernote
@@ -29,7 +30,7 @@ class EvernoteNote(object):
             
     def _get_content(self, fname):
         fpath = os.path.join('test-data', 'notes-content', fname)
-        with open(fpath, 'r') as note_file:
+        with codecs.open(fpath, 'r', encoding='utf-8') as note_file:
             return note_file.read()
 
 class WordpressXmlRpcItem(object):

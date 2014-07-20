@@ -277,5 +277,8 @@ class EvernoteApiWrapper():
                                         with_content,
                                         with_resource_data,
                                         False, False)
+        # Decode strings so rest of program can assume Unicode.
+        note.title = note.title.decode('utf-8')
+        note.content = note.content.decode('utf-8')
         self._cache[note_guid] = note
         return note
