@@ -152,7 +152,8 @@ class WpEnContent(WpEnAttribute):
     @staticmethod
     def post_process_content_lines(content_lines):
         sbsc_re = re.compile(
-            '\[sb_easy_image ids\=\"(?P<id>\d+)\" size\=\"medium\" columns\=\"1\" link\=\"Lightbox\"\]')
+            '\[sb_easy_image ids\=\"(?P<id>\d+)\" size\=\"medium\" '
+            'columns\=\"1\" link\=\"Lightbox\"\]')
         for num, line in enumerate(content_lines):
             matches = sbsc_re.findall(line)
             if 1 < len(matches):
