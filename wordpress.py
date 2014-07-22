@@ -203,17 +203,31 @@ class WordPressItem(object):
     def __init__(self):
         # internal dictionary for WordPress attributes
         self._wp_attrs = dict()
-        # A set of WordPress items that the current item refers to
+        # A hashtable of WordPress items that the current item refers to
         #  (e.g. uses as images or links to other posts or pages)
         #  **not** including metadata fields (like thumbnail).
-        self._ref_wp_items = set()
+        # The table may contain actual WordPressItem-based instances,
+        #  or callables that return WordPressItem-based instances when called
+        #  with no arguments.
+        # This allows late-loading items that may not be needed.
+        # The key is not important - just used to avoid duplicate items.
+        self._ref_wp_items = dict()
     
     @property
     def ref_items(self):
-        for item in ([self.thumbnail, self.parent, self.project] +
-                     list(self._ref_wp_items)):
+        # First yield the metadata items, if they are WordPressItems.
+        for item in [self.thumbnail, self.parent, self.project]:
             if item and isinstance(item, WordPressItem):
                 yield item
+        # Then yield items referenced in the content, potentially late-loading
+        #  them for the first time (and caching the results ofcourse).
+        for k in self._ref_wp_items:
+            item = self._ref_wp_items[k]
+            if not isinstance(item, WordPressItem):
+                item = item()
+                assert(isinstance(item, WordPressItem))
+                self._ref_wp_items[k] = item
+            yield item
     
     def post_stub(self, wp_wrapper):
         """Post this WordPress item as a stub item, and update the ID.
@@ -226,14 +240,13 @@ class WordPressItem(object):
             raise RuntimeError('WordPress item has ID set.')
         self.upload_new_stub(wp_wrapper)
     
-    def update_auto_attributes(self, wp_wrapper, xml_post=None):
+    def update_auto_attributes(self, wp_wrapper, xml_post):
         """Get the updated WordPress XML-RPC item and update auto fields.
         
         :type wp_wrapper: WordPressApiWrapper
+        :param xml_post: An up-to-date XML-RPC post object to update from.
+        :type xml_post: XmlRpcPost
         """
-        if xml_post is None:
-            assert(self.id is not None)
-            xml_post = wp_wrapper.get_post(self.id)
         # TODO: use attributes dictionary to do this automatically
         self.last_modified = xml_post.date_modified
         if 'publish' == xml_post.post_status and self.published_date is None:
@@ -409,12 +422,16 @@ class WordPressPost(WordPressItem):
         :param orig_post: Existing WordPress post for this instance.
         :type orig_post: XmlRpcPost
         """
-        post = self.xml_rpc_object()
+        if orig_post:
+            post = orig_post
+        else:
+            post = self.xml_rpc_object()
         
         def get_orig_custom_field(key):
-            for field in orig_post.custom_fields:
-                if field['key'] == key:
-                    return field
+            if hasattr(orig_post, 'custom_fields'):
+                for field in orig_post.custom_fields:
+                    if field['key'] == key:
+                        return field
         def add_custom_field(post, key, val):
             if not hasattr(post, 'custom_fields'):
                 post.custom_fields = list()
@@ -500,7 +517,7 @@ class WordPressPost(WordPressItem):
         xmlrpc_obj = self.as_xml_rpc_obj(wp_wrapper.get_post(self.id))
         if not wp_wrapper.edit_post(xmlrpc_obj):
             raise RuntimeError('Failed updating WordPress post')
-        self.update_auto_attributes(wp_wrapper)
+        self.update_auto_attributes(wp_wrapper, wp_wrapper.get_post(self.id))
 
 class WordPressApiWrapper(object):
     """WordPress client API wrapper class."""

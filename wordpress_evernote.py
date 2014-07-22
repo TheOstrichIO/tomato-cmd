@@ -146,8 +146,10 @@ class WpEnContent(WpEnAttribute):
         for a_tag in self._content_node.findall('.//a'):
             href = a_tag.get('href', '')
             if EvernoteApiWrapper.is_evernote_url(href):
-                ref_item = self._adaptor.wp_item_from_note(href)
-                self._wp_item._ref_wp_items.add(ref_item)
+                # Add a late-loading function in case this will never be needed
+                def load_item(link):
+                    return lambda: self._adaptor.wp_item_from_note(link)
+                self._wp_item._ref_wp_items[href] = load_item(href)
     
     @staticmethod
     def post_process_content_lines(content_lines):
@@ -421,11 +423,13 @@ class EvernoteWordpressAdaptor(object):
                 logger.warning('Note has too many attached resources (%d). '
                                'Choosing the first one, arbitrarily.',
                                len(note.resources))
-            wp_item._get_image_data = lambda: \
-                self.evernote.get_resource_data(resource.guid)
+            def fetch_bits(guid, name):
+                def fetch():
+                    logger.debug('Fetching image %s', name)
+                    return self.evernote.get_resource_data(guid)
+                return fetch
+            wp_item._get_image_data = fetch_bits(resource.guid, note.title)
             wp_item._image_mime = resource.mime
-            logger.debug('Got image %s with mimetype %s',
-                         note.title, wp_item.mimetype)
         return wp_item
     
     def create_wordpress_stub_from_note(self, wp_item, en_note):

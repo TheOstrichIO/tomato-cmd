@@ -161,7 +161,7 @@ class TestEvernoteWordPressParser(ElementTreeEqualExtension):
                          wp_image.description)
         self.assertIsInstance(wp_image.parent, WordPressPost)
         self.assertEqual(544, wp_image.parent.id)
-        self.assertSetEqual(set(), wp_image._ref_wp_items)
+        self.assertDictEqual(dict(), wp_image._ref_wp_items)
     
     def test_evernote_post_parser(self):
         note = test_notes['note-with-id-thumbnail-attached-image-body-link']
@@ -186,10 +186,14 @@ class TestEvernoteWordPressParser(ElementTreeEqualExtension):
                              wp_post.content.split('\n'))
         # The thumbnail image is **also** expected in _ref_wp_items because
         #  it is also used as an image in the post content.
-        self.assertSetEqual(
-          set([self.adaptor.cache['abcd1234-1234-abcd-1234-abcd1234abcd'],
-               self.adaptor.cache['abcd1234-5678-0000-7890-abcd1234abcd']]),
-          wp_post._ref_wp_items)
+        links = ['evernote:///view/123/s123/abcd1234-1234-abcd-1234-'
+                 'abcd1234abcd/abcd1234-1234-abcd-1234-abcd1234abcd/',
+                 'evernote:///view/123/s123/abcd1234-5678-0000-7890-'
+                 'abcd1234abcd/abcd1234-5678-0000-7890-abcd1234abcd/']
+        self.assertEqual(2, len(wp_post._ref_wp_items))
+        for link in links:
+            self.assertIn(link, wp_post._ref_wp_items)
+            self.assertTrue(hasattr(wp_post._ref_wp_items[link], '__call__'))
     
     def test_evernote_page_parser(self):
         note = test_notes['project-page-with-id-nothumb']
@@ -206,7 +210,7 @@ class TestEvernoteWordPressParser(ElementTreeEqualExtension):
                          wp_post.slug)
         self.assertIsNone(wp_post.thumbnail)
         self.assertEqual('Nothing to see here.', wp_post.content)
-        self.assertSetEqual(set(), wp_post._ref_wp_items)
+        self.assertDictEqual(dict(), wp_post._ref_wp_items)
     
     def test_evernote_project_post_parser(self):
         note = test_notes['project-note-with-id-nothumb']
@@ -224,7 +228,7 @@ class TestEvernoteWordPressParser(ElementTreeEqualExtension):
         self.assertEqual('Nothing to see here .', wp_post.content)
         self.assertIsInstance(wp_post.project, WordPressPost)
         self.assertEqual(583, wp_post.project.id)
-        self.assertSetEqual(set(), wp_post._ref_wp_items)
+        self.assertDictEqual(dict(), wp_post._ref_wp_items)
     
     def test_evernote_link_processor_parser(self):
         note = test_notes['project-note-noid']
@@ -239,9 +243,14 @@ class TestEvernoteWordPressParser(ElementTreeEqualExtension):
         self.assertEqual("Nothing to see here 583.", wp_post.content)
         self.assertIsInstance(wp_post.project, WordPressPost)
         self.assertEqual(583, wp_post.project.id)
-        self.assertSetEqual(
-          set((self.adaptor.cache['abcd1234-aaaa-0000-ffff-abcd1234abcd'],)),
-          wp_post._ref_wp_items)
+        link = ('evernote:///view/123/s123/abcd1234-aaaa-0000-ffff-'
+                'abcd1234abcd/abcd1234-aaaa-0000-ffff-abcd1234abcd/')
+        self.assertEqual(1, len(wp_post._ref_wp_items))
+        self.assertIn(link, wp_post._ref_wp_items)
+        self.assertTrue(hasattr(wp_post._ref_wp_items[link], '__call__'))
+        self.assertEqual(
+            self.adaptor.cache['abcd1234-aaaa-0000-ffff-abcd1234abcd'],
+            wp_post._ref_wp_items[link]())
     
     def test_regression_nested_elements(self):
         note = test_notes['regression-projnote-span-br']
@@ -299,7 +308,6 @@ class TestEvernoteWordPressPublisher(ElementTreeEqualExtension):
         self.assertIsInstance(wp_post, WordPressPost)
         wp_post.update_item(self.wordpress)
         self.assertTrue(self.wordpress.edit_post.called)
-        self.wordpress.get_post.assert_called_once_with(303)
     
     def test_publish_project_note_existing_project_index(self):
         self.wordpress.new_post = MagicMock(return_value=660)
@@ -314,7 +322,7 @@ class TestEvernoteWordPressPublisher(ElementTreeEqualExtension):
         self.assertIsInstance(wp_post, WordPressPost)
         self.assertIsNone(wp_post.id)
         self.adaptor.post_to_wordpress_from_note(note.guid)
-        self.wordpress.get_post.assert_called_once_with(660)
+        self.wordpress.get_post.assert_has_calls([call(660), call(660)])
         self.assertEqual(660, wp_post.id)
         expected_note = EvernoteNote(
             guid='abcd1234-aaaa-2048-ffff-abcd1234abcd',
@@ -352,7 +360,7 @@ class TestEvernoteWordPressPublisher(ElementTreeEqualExtension):
             notebookGuid='abcd1234-5678-1928-7890-abcd1234abcd',
             content='uploaded-image.xml')
         self.assertETfromStrEqual(expected_note.content, note.content)
-        self.evernote.updateNote.assert_has_calls([call(note), call(note)])
+        self.evernote.updateNote.assert_called_once_with(note)
         self.assertTrue(self.wordpress.upload_file.called)
         self.wordpress.get_post.assert_has_calls([call(792), call(792)])
         self.wordpress.edit_post.assert_has_calls(
