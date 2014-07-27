@@ -10,6 +10,7 @@ import datetime
 from wordpress_xmlrpc import Client #, WordPressPost
 from wordpress_xmlrpc import WordPressPost as XmlRpcPost
 from wordpress_xmlrpc import WordPressPage as XmlRpcPage
+from wordpress_xmlrpc import WordPressMedia as XmlRpcMedia
 #from wordpress_xmlrpc import WordPressPage as XmlRpcPage
 from wordpress_xmlrpc.compat import xmlrpc_client
 #from wordpress_xmlrpc.methods.posts import GetPosts, NewPost
@@ -258,18 +259,23 @@ class WordPressImageAttachment(WordPressItem):
     
     @classmethod
     def fromWpMediaItem(cls, wp_media_item):
+        """Build a new ImageAttachment instance based on a XmlRpc Media object.
+        
+        :type wp_media_item: XmlRpcMedia
+        """
         new_object = cls()
-        new_object._init_from_wp_media_item(wp_media_item)
+        mapping = [
+            'id',
+            'parent',
+            'title',
+            'description',
+            'caption',
+            'link',]
+        for attr in mapping:
+            setattr(new_object, attr, getattr(wp_media_item, attr))
+        new_object._filename = UrlParser(wp_media_item.link).path_parts()[-1]
+        new_object._get_image_data = lambda: urllib2.urlopen(new_object.link)
         return new_object
-    
-    def _init_from_wp_media_item(self, wp_media_item):
-        for slot in self._slots:
-            if not hasattr(wp_media_item, slot):
-                logger.error('WordPress MediaItem "%s" has no attribute "%s"',
-                             wp_media_item, slot)
-                raise RuntimeError()
-            self.__dict__[slot] = getattr(wp_media_item, slot)
-        self.filename = UrlParser(self.link).path_parts()[-1]
     
     def markdown_ref(self, context=None):
         if self.id:
@@ -283,11 +289,6 @@ class WordPressImageAttachment(WordPressItem):
 #                 return '[caption id="attachment_%d" align="alignnone"]%s %s' \
 #                        '[/caption]' % (self.id, imtag, self.caption)
 #             return imtag
-    
-    def image(self):
-        "Returns a file-like object for reading image data."
-        return urllib2.urlopen(self.link)
-        # TODO: handle case of Evernote resource...
     
     @property
     def image_data(self):
@@ -538,9 +539,9 @@ class WordPressApiWrapper(object):
         """Generates WordPress attachment objects."""
         for media_item in self._wp.call(media.GetMediaLibrary(
                             {'parent_id': parent_id and str(parent_id)})):
-            wpImage = WordPressImageAttachment.fromWpMediaItem(media_item)
-            logger.debug(u'Yielding WordPress media item %s', wpImage)
-            yield wpImage
+            wp_image = WordPressImageAttachment.fromWpMediaItem(media_item)
+            logger.debug(u'Yielding WordPress media item %s', wp_image)
+            yield wp_image
     
     def post_generator(self):
         """Generate WordPress post objects."""
