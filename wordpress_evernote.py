@@ -153,10 +153,15 @@ class WpEnContent(WpEnAttribute):
     
     @staticmethod
     def post_process_content_lines(content_lines):
+        # ShellBot Easy Image post-processor:
         sbsc_re = re.compile(
             '\[sb_easy_image ids\=\"(?P<id>\d+)\" size\=\"medium\" '
             'columns\=\"1\" link\=\"Lightbox\"\]')
+        # Markdown heading anchoring post-processor:
+        mdha_re = re.compile(
+            '(?P<hlevel>\#+)\s+(?P<htext>[^\#]+)\s+\#(?P<hanchor>[\w\-]+)')
         for num, line in enumerate(content_lines):
+            # ShellBot Easy Image post-processor:
             matches = sbsc_re.findall(line)
             if 1 < len(matches):
                 new_shortcode = ('[sb_easy_image ids="%s" size="medium" '
@@ -165,6 +170,13 @@ class WpEnContent(WpEnAttribute):
                 content_lines[num] = re.sub('\[.*\]',
                                             new_shortcode,
                                             content_lines[num])
+            # Markdown heading anchoring post-processor:
+            match = mdha_re.match(line)
+            if match:
+                d = match.groupdict()
+                content_lines[num] = '%s <a name="%s"></a>%s' % (d['hlevel'],
+                                                                 d['hanchor'],
+                                                                 d['htext'])
     
     def _render_node_as_markdown(self):
         if self._cached_rendered_content:
