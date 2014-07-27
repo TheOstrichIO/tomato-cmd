@@ -600,24 +600,30 @@ class EvernoteWordpressAdaptor(object):
                 item._wp_attrs[attr].fget() is not None):
                 attrs_to_update[attr] = item._wp_attrs[attr].str()
         self.update_note_metdata(note, attrs_to_update)
+    
+    def import_images_to_evernote(self, parent_id, notebook_name):
+        for wp_image in self.wordpress.media_item_generator(parent_id):
+            save_wp_image_to_evernote(self.evernote, notebook_name, wp_image)
 
 def save_wp_image_to_evernote(en_wrapper, notebook_name, wp_image,
                               force=False):
-    raise NotImplementedError("I'm broken")
+    # TODO: Do this better...
+    #raise NotImplementedError("I'm broken")
     # lookup existing WordPress image note
     #note_title = u'%s <%s>' % (wp_image.filename, wp_image.id)
     #image_note = en_wrapper.getSingleNoteByTitle(note_title, notebook_name)
 #     if not image_note or force:
-#         # prepare resource and note
-#         resource, resource_tag = en_wrapper.makeResource(wp_image.image(),
-#                                                          wp_image.filename)
-#         note_content = '%s\r\n<hr/>\r\n' % (resource_tag)
-#         for attr in WordPressImageAttachment._slots:
-#             note_content += '<div>%s=%s</div>\r\n' % (attr,
-#                                                       getattr(wp_image, attr))
-#         wp_image_note = en_wrapper.makeNote(title=note_title,
-#                                             content=note_content,
-#                                             resources=[resource])
+    # prepare resource and note
+    resource, resource_tag = en_wrapper.makeResource(wp_image.image_data,
+                                                     wp_image.filename)
+    note_content = ''
+    for attr in ['id', 'title', 'link', 'parent', 'caption', 'description']:
+        note_content += '<div>%s=%s</div>\r\n' % (attr,
+                                                  getattr(wp_image, attr))
+    note_content += '<hr/>\r\n%s' % (resource_tag)
+    wp_image_note = en_wrapper.makeNote(title=wp_image.filename,
+                                        content=note_content,
+                                        resources=[resource])
 #     if image_note:
 #         # note exists
 #         logger.info('WP Image note "%s" exists in Evernote', note_title)
@@ -629,9 +635,9 @@ def save_wp_image_to_evernote(en_wrapper, notebook_name, wp_image,
 #         else:
 #             logger.debug('Skipping note update')
 #     else:
-#         # create new note
-#         logger.info('Creating new WP Image note "%s"', note_title)
-#         en_wrapper.saveNoteToNotebook(wp_image_note, notebook_name)
+    # create new note
+    logger.info('Creating new WP Image note "%s"', wp_image.filename)
+    en_wrapper.saveNoteToNotebook(wp_image_note, notebook_name)
 
 ###############################################################################
 
@@ -663,21 +669,28 @@ sync_parser = subparsers.add_parser('sync',
                                     help='Synchronize Evernote-WordPress')
 sync_parser.add_argument('query',
                          help='Evernote query for notes to sync')
-sync_parser.set_defaults(func=lambda  adaptor, args: adaptor.sync(args.query))
+sync_parser.set_defaults(func=lambda adaptor, args: adaptor.sync(args.query))
 
 detach_parser = subparsers.add_parser('detach',
                                       help='Detach Evernote-WordPress '
                                            'synchronization')
 detach_parser.add_argument('query',
                            help='Evernote query for notes to detach')
-detach_parser.set_defaults(func=lambda  adaptor, args:
+detach_parser.set_defaults(func=lambda adaptor, args:
                            adaptor.detach(args.query))
 
-###############################################################################
+import_images_parser = subparsers.add_parser(
+    'import-images',
+    help='Import images attached to specified WordPress post into Evernote.')
+import_images_parser.add_argument('--parent',
+                                  help='Parent post.')
+import_images_parser.add_argument('--notebook',
+                                  help='Name of dest Evernote notebook.')
+import_images_parser.set_defaults(func=lambda adaptor, args:
+                                  adaptor.import_images_to_evernote(
+                                      args.parent, args.notebook))
 
-def _images_to_evernote(adaptor, unused_args):
-    for wp_image in adaptor.wordpress.media_item_generator():
-        save_wp_image_to_evernote(adaptor.evernote, '.zImages', wp_image)
+###############################################################################
 
 def _custom_fields(adaptor, unused_args):
     for wp_post in adaptor.wordpress.post_generator():
@@ -686,7 +699,6 @@ def _custom_fields(adaptor, unused_args):
 def main():
     args = wp_en_parser.parse_args()
     adaptor = _get_adaptor(args)
-    #_images_to_evernote(adaptor, args)
     args.func(adaptor, args)
 
 if '__main__' == __name__:
