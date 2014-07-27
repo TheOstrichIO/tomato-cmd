@@ -601,12 +601,19 @@ class EvernoteWordpressAdaptor(object):
                 attrs_to_update[attr] = item._wp_attrs[attr].str()
         self.update_note_metdata(note, attrs_to_update)
     
-    def import_images_to_evernote(self, parent_id, notebook_name):
+    def import_images_to_evernote(self, parent_id, notebook_name,
+                                  set_id=None, set_parent=None):
+        overrided_attrs = dict()
+        if set_id:
+            overrided_attrs['id'] = set_id
+        if set_parent:
+            overrided_attrs['parent'] = set_parent
         for wp_image in self.wordpress.media_item_generator(parent_id):
-            save_wp_image_to_evernote(self.evernote, notebook_name, wp_image)
+            save_wp_image_to_evernote(self.evernote, notebook_name, wp_image,
+                                      overrides=overrided_attrs)
 
 def save_wp_image_to_evernote(en_wrapper, notebook_name, wp_image,
-                              force=False):
+                              force=False, overrides={}):
     # TODO: Do this better...
     #raise NotImplementedError("I'm broken")
     # lookup existing WordPress image note
@@ -618,8 +625,11 @@ def save_wp_image_to_evernote(en_wrapper, notebook_name, wp_image,
                                                      wp_image.filename)
     note_content = ''
     for attr in ['id', 'title', 'link', 'parent', 'caption', 'description']:
-        note_content += '<div>%s=%s</div>\r\n' % (attr,
-                                                  getattr(wp_image, attr))
+        if attr in overrides:
+            value = overrides[attr]
+        else:
+            value = getattr(wp_image, attr)
+        note_content += '<div>%s=%s</div>\r\n' % (attr, value)
     note_content += '<hr/>\r\n%s' % (resource_tag)
     wp_image_note = en_wrapper.makeNote(title=wp_image.filename,
                                         content=note_content,
@@ -686,9 +696,14 @@ import_images_parser.add_argument('--parent',
                                   help='Parent post.')
 import_images_parser.add_argument('--notebook',
                                   help='Name of dest Evernote notebook.')
+import_images_parser.add_argument('--set_id',
+                                  help='Override ID value with this.')
+import_images_parser.add_argument('--set_parent',
+                                  help='Override parent value with this.')
 import_images_parser.set_defaults(func=lambda adaptor, args:
                                   adaptor.import_images_to_evernote(
-                                      args.parent, args.notebook))
+                                      args.parent, args.notebook,
+                                      args.set_id, args.set_parent))
 
 ###############################################################################
 
