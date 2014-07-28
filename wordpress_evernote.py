@@ -275,6 +275,7 @@ class EvernoteWordpressAdaptor(object):
             if text:
                 p = ET.SubElement(get_active_node(), 'p')
                 p.text = text
+                return p
         def parse_node(root, target_node=None):
             tag = root.tag.lower()
             text = fix_text(root.text)
@@ -287,21 +288,26 @@ class EvernoteWordpressAdaptor(object):
                     stage = 'content'
                 else:
                     raise NoteParserError('Invalid stage "%s"' % (stage))
-                append_tail(tail)
+                p = ET.SubElement(get_active_node(), 'p')
+                tail_p = append_tail(tail)
+                return tail_p if tail_p is not None else p
             elif tag in ('en-note', 'div', 'p', 'br'):
                 p = ET.SubElement(get_active_node(), 'p')
                 if text:
                     p.text = text
+                target_node = p
                 for e in root:
-                    parse_node(e, p)
-                append_tail(tail)
+                    next_target = parse_node(e, target_node)
+                    if next_target is not None:
+                        target_node = next_target
+                tail_p = append_tail(tail)
+                return tail_p if tail_p is not None else target_node
             elif tag in ('a', 'en-todo', 'en-media'):
                 # Not expecting deeper levels!
                 if 0 < len(root):
                     logger.warn('Skipping element with unexpected nested '
                                 'elements: %s', ET.tostring(root))
                 else:
-                    assert(0 == len(root))
                     child = ET.SubElement(
                         target_node if target_node is not None
                         else ET.SubElement(get_active_node(), 'p'),
@@ -326,7 +332,7 @@ class EvernoteWordpressAdaptor(object):
                 if tail:
                     logger.warn('Guessing how to append tail of span element: '
                                 '%s', ET.tostring(root))
-                    append_tail(tail)
+                    return append_tail(tail)
             else:
                 # Unexpected tag?
                 logger.warn('Unexpected tag "%s"', root)
