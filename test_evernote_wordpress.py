@@ -146,6 +146,22 @@ class TestEvernoteWordPressParser(ElementTreeEqualExtension):
             expected_note.content)
         self.assertElementTreeEqual(expected_tree, normalized_tree)
     
+    def test_regression_divless_link_attr(self):
+        note = EvernoteNote(
+            guid='1',
+            title='1',
+            notebookGuid='abcd1234-5678-abef-7890-abcd1234abcd',
+            content='regression-projnote-divless-link.xml')
+        normalized_tree = self.adaptor._parse_note_xml(note.content)
+        expected_note = EvernoteNote(
+            guid=note.guid,
+            title=note.title,
+            notebookGuid=note.notebookGuid,
+            content='normalized-projnote-divless-link.xml')
+        expected_tree = self.adaptor._parse_xml_from_string(
+            expected_note.content)
+        self.assertElementTreeEqual(expected_tree, normalized_tree)
+    
     def test_evernote_image_parser(self):
         note = test_notes['image-with-id']
         wp_image = self.adaptor.wp_item_from_note(note.guid)
