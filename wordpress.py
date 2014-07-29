@@ -466,6 +466,10 @@ class WordPressPost(WordPressItem):
         if (self.parent and hasattr(self.parent, 'id') and
             self.parent.id is not None):
             post.parent_id = self.parent.id
+        if self.post_status in ('publish',) and self.published_date:
+            post.date = self.published_date
+        else:
+            del post.date
         if self.content_format:
             add_custom_field(post, 'content_format', self.content_format)
         if self.project and hasattr(self.project, 'id'):
