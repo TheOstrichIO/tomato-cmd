@@ -463,7 +463,7 @@ class WordPressPost(WordPressItem):
             add_terms(post, 'category', self.categories)
         if (self.parent and hasattr(self.parent, 'id') and
             self.parent.id is not None):
-            post.parent = self.parent.id
+            post.parent_id = self.parent.id
         if self.content_format:
             add_custom_field(post, 'content_format', self.content_format)
         if self.project and hasattr(self.project, 'id'):
