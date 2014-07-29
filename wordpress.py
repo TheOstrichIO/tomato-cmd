@@ -425,6 +425,8 @@ class WordPressPost(WordPressItem):
         """
         if orig_post:
             post = orig_post
+            # Clear existing tags and categories to avoid out-dated values
+            post.terms = list()
         else:
             post = self.xml_rpc_object()
         
