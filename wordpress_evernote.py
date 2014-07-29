@@ -490,7 +490,7 @@ class EvernoteWordpressAdaptor(object):
         en_note = self.evernote.get_note(note_link)
         # Convert Evernote timestamp (ms from epoch) to DateTime object
         # (http://dev.evernote.com/doc/reference/Types.html#Typedef_Timestamp)
-        note_updated = datetime.fromtimestamp(en_note.updated/1000)
+        note_updated = datetime.utcfromtimestamp(en_note.updated/1000)
         # Create a WordPress item from note
         #: :type wp_item: WordPressItem
         wp_item = self.wp_item_from_note(en_note)
