@@ -309,10 +309,11 @@ class TestEvernoteWordPressParser(ElementTreeEqualExtension):
             title='2',
             notebookGuid='abcd1234-5678-abef-7890-abcd1234abcd',
             content='regression-losing-whitespace.xml')
-        expected_content = note.content.replace('123', '456')
+        expected_content = note.content.replace('123', '456').encode('utf-8')
         self.adaptor.update_note_metdata(note, {'id': '456'})
         self.assertListEqual(expected_content.split('\n'),
                              note.content.split('\n'))
+        self.assertIsInstance(note.content, str)
 
 class TestEvernoteWordPressPublisher(ElementTreeEqualExtension):
     
