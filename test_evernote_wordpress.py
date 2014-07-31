@@ -332,6 +332,7 @@ class TestEvernoteWordPressPublisher(ElementTreeEqualExtension):
             return_value=WordpressXmlRpcItem(
                 id=660, link='http://www.ostricher.com/project-note',
                 date_modified=datetime(2014, 7, 1, 9, 45, 12),
+                date=None,
                 post_status='draft'))
         note = test_notes['project-note-noid']
         wp_post = self.adaptor.wp_item_from_note(note.guid)
@@ -401,7 +402,7 @@ class TestEvernoteWordPressPublisher(ElementTreeEqualExtension):
         self.wordpress.get_post = MagicMock(
             return_value=WordpressXmlRpcItem(
                 id=544, link='http://www.ostricher.com/?id=544',
-                date=datetime(2014, 7, 7, 9, 45, 12),
+                date=datetime(2014, 7, 7, 9, 43, 00),
                 date_modified=datetime(2014, 7, 7, 9, 45, 12),
                 post_status='publish'))
         note = test_notes['note-with-id-thumbnail-attached-image-body-link']
@@ -409,7 +410,7 @@ class TestEvernoteWordPressPublisher(ElementTreeEqualExtension):
         self.adaptor.post_to_wordpress_from_note(note.guid)
         self.assertEqual(datetime(2014, 7, 7, 9, 45, 12),
                          self.adaptor.cache[note.guid].last_modified)
-        self.assertEqual(datetime(2014, 7, 7, 9, 45, 12),
+        self.assertEqual(datetime(2014, 7, 7, 9, 43, 00),
                          self.adaptor.cache[note.guid].published_date)
 
 class TestEvernoteDetach(ElementTreeEqualExtension):

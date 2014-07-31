@@ -250,7 +250,8 @@ class WordPressItem(object):
         """
         # TODO: use attributes dictionary to do this automatically
         self.last_modified = xml_post.date_modified
-        if 'publish' == xml_post.post_status and self.published_date is None:
+        if ('publish' == xml_post.post_status and self.published_date is None
+            and hasattr(xml_post, 'date') and xml_post.date is not None):
             # first publish
             self.published_date = xml_post.date
         self.link = xml_post.link
@@ -468,8 +469,9 @@ class WordPressPost(WordPressItem):
             post.parent_id = self.parent.id
         if self.post_status in ('publish',) and self.published_date:
             post.date = self.published_date
-        else:
-            del post.date
+        # Don't delete - it fucks up the test MagicMock return value...
+        #else:
+        #    del post.date
         if self.content_format:
             add_custom_field(post, 'content_format', self.content_format)
         if self.project and hasattr(self.project, 'id'):
