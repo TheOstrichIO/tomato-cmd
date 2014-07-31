@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
+<en-note style="word-wrap: break-word; -webkit-nbsp-mode: space; -webkit-line-break: after-white-space;">
+<div>type=post</div>
+<div>id=123</div>
+<div>
+<hr /></div>
+<div>Here's a space-indented list:</div>
+<div><br /></div>
+<div>1. No indent</div>
+<div>   Continuation by indent.</div>
+<div>   - Indented sub-item</div>
+<div>     Continued indented sub-item</div>
+</en-note>
