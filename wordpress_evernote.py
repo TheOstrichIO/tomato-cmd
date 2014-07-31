@@ -239,6 +239,8 @@ class EvernoteWordpressAdaptor(object):
         # Valid XML entities: quot, amp, apos, lt and gt.
         parser.parser.UseForeignDTD(True)
         parser.entity['nbsp'] = ' '
+        if isinstance(xml_string, str):
+            xml_string = xml_string.decode('utf-8')
         return ET.fromstring(xml_string.replace(u'\xa0', u' ').encode('utf-8'),
                              parser=parser)
     
@@ -585,11 +587,15 @@ class EvernoteWordpressAdaptor(object):
         # TODO: if metadata field doesn't exist - create one?
         if modified_flag:
             logger.info('Writing modified content back to note')
-            note.content = '\n'.join([
+            note.content = ('\n'.join([
                 '<?xml version="1.0" encoding="UTF-8" standalone="no"?>',
                 '<!DOCTYPE en-note SYSTEM '
                 '"http://xml.evernote.com/pub/enml2.dtd">',
                 ET.tostring(root)])
+                .replace(u'  ', u'\xa0 ').replace(u'  ', u' \xa0')
+                .encode('utf-8'))
+            # Replacing pairs of spaces with '\xa0 ' or ' \xa0' in order to
+            #  have all whitespace displayed as expected in Evernote editor.
             self.evernote.updateNote(note)
         else:
             logger.info('No changes to note content')
