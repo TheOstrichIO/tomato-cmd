@@ -165,7 +165,8 @@ class WpEnContent(WpEnAttribute):
             matches = sbsc_re.findall(line)
             if 1 < len(matches):
                 new_shortcode = ('[sb_easy_image ids="%s" size="medium" '
-                                 'columns="%d" link="Lightbox"]' %
+                                 'columns="%d" link="Lightbox" '
+                                 'order="custom"]' %
                                  (','.join(matches), len(matches)))
                 content_lines[num] = re.sub('\[.*\]',
                                             new_shortcode,
