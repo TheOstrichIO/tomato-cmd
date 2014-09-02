@@ -185,6 +185,7 @@ class WordPressItem(object):
     description = wp_property('description')
     thumbnail = wp_property('thumbnail')
     project = wp_property('project')
+    project_status = wp_property('project_status')
     hemingway_grade = wp_property('hemingway_grade')
     seo_title = wp_property('seo_title')
     seo_description = wp_property('seo_description')
@@ -476,6 +477,8 @@ class WordPressPost(WordPressItem):
             add_custom_field(post, 'content_format', self.content_format)
         if self.project and hasattr(self.project, 'id'):
             add_custom_field(post, 'project', self.project.id)
+        if self.project_status:
+            add_custom_field(post, 'project_status', self.project_status)
         if self.hemingway_grade:
             add_custom_field(post, 'hemingwayapp-grade', self.hemingway_grade)
         # SEO fields, assuming All-In-One SEO Pack plugin, with my special
