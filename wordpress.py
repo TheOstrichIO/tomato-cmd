@@ -402,7 +402,7 @@ class WordPressPost(WordPressItem):
                                    '%s' % (func_name, self))
         if self.id:
             # TODO: title & context for anchor type link with text
-            return '[post id="%d"]' % (self.id)
+            return '[post id=%d]' % (self.id)
         if self.link:
             if self.title:
                 return '%s "%s"' % (self.link, self.title.replace('"', ''))
