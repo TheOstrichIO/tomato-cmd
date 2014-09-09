@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
+<en-note style="word-wrap: break-word; -webkit-nbsp-mode: space; -webkit-line-break: after-white-space;">
+<div>id=544</div>
+<div>type=post</div>
+<div>content_format=markdown</div>
+<div>title=Embedded Image Note Test</div>
+<div>
+<hr/></div>
+<div>First line of content.<br/></div>
+<div><br/></div>
+<div>Some content between br-divs, before closing of div that started before meta<br/></div>
+<div><br/></div>
+<div>Line with image tag pointing to image-note as Evernote linked note:</div>
+<div><br/></div>
+<div>![This is the image description and caption](<en-media style="height: auto;" type="image/png" hash="d33264f9ea52581ca7239cf579803f4a"/> &quot;Image Title&quot;)<br/></div>
+</en-note>
