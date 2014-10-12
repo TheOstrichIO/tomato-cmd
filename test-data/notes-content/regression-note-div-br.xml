@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
+<en-note style="word-wrap: break-word; -webkit-nbsp-mode: space; -webkit-line-break: after-white-space;">
+<div>type=post</div>
+<div>id=&lt;auto&gt;</div>
+<div>content_format=markdown</div>
+<div>title=A post in the project</div>
+<div>author=ItamarO<br/></div>
+<div>link=&lt;auto&gt;</div>
+<div>categories=Meta</div>
+<div>tags=side-projects</div>
+<div>hemingwayapp-grade=9<br/></div>
+<div>last_modified=&lt;auto&gt;</div>
+<div><br/></div>
+<div><hr/></div>
+<div>Nothing to see here.<br/></div>
+<div>Div with text that ends with "br" tag should not result two blank lines!</div>
+<div>Am I right?</div>
+</en-note>

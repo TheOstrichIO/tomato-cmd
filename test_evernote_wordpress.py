@@ -314,6 +314,23 @@ class TestEvernoteWordPressParser(ElementTreeEqualExtension):
         self.assertListEqual(expected_content.split('\n'),
                              note.content.split('\n'))
         self.assertIsInstance(note.content, str)
+    
+    def test_regression_div_br_redundant_blanks(self):
+        expected_content_lines = [
+            'Nothing to see here.',
+            'Div with text that ends with "br" tag should not result two '
+            'blank lines!',
+            'Am I right?',
+            ]
+        note = EvernoteNote(
+            guid='3',
+            title='3',
+            notebookGuid='abcd1234-3432-abef-fede-abcd1234abcd',
+            content='regression-note-div-br.xml')
+        wp_post = self.adaptor.wp_item_from_note(note)
+        self.assertIsInstance(wp_post, WordPressPost)
+        self.assertListEqual(expected_content_lines,
+                             wp_post.content.split('\n'))
 
 class TestEvernoteWordPressPublisher(ElementTreeEqualExtension):
     
