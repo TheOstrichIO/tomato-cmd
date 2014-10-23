@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+import copy
 import time
 import re
 import mimetypes
@@ -95,9 +96,13 @@ class EvernoteApiWrapper():
                           bodyHash=hashlib.md5(body).digest())
         attr = Types.ResourceAttributes(fileName=filename.encode('utf-8'))
         resource = Types.Resource(data=data, mime=mime, attributes=attr)
-        resource_tag = '<en-media type="%s" hash="%s" />' % \
-                       (mime, binascii.hexlify(data.bodyHash))
-        return resource, resource_tag.encode('utf-8')
+        return resource, EvernoteApiWrapper.get_resource_tag(resource)
+    
+    @staticmethod
+    def get_resource_tag(resource):
+        return ('<en-media type="%s" hash="%s" />' %
+                (resource.mime, binascii.hexlify(resource.data.bodyHash))
+                ).encode('utf-8')
     
     @staticmethod
     def is_evernote_url(url):
@@ -146,10 +151,40 @@ class EvernoteApiWrapper():
         self._init_en_client(token, sandbox)
         self._notes_metadata_page_size = 100
         self._notebook_list = None
+        self._user = None
+    
+    @ratelimit_wait_and_retry
+    def get_user(self):
+        """Return a user instance of the authenticated user."""
+        # Return from cache if available
+        if self._user:
+            return self._user
+        # Cache for future use
+        self._user = self._client.get_user_store().getUser(self._client.token)
+        return self._user
+    
+    def get_evernote_url(self, note_or_guid):
+        """Return an evernote:/// URL for the specified note_or_guid."""
+        if hasattr(note_or_guid, 'guid'):
+            guid = note_or_guid.guid
+        else:
+            guid = self.get_note_guid(note_or_guid)
+        user = self.get_user()
+        return 'evernote:///view/{uid}/{sid}/{guid}/{guid}/'.format(
+            uid=user.id, sid=user.shardId, guid=guid)
+    
+    def note_link(self, note_or_guid, body):
+        """Return a formatted note-link a-tag for note_or_guid."""
+        return ('<a href="%s" style="color: rgb(105, 170, 53);">%s</a>' %
+                (self.get_evernote_url(note_or_guid), body))
     
     @ratelimit_wait_and_retry
     def _listNotebooks(self):
         return self._note_store.listNotebooks()
+    
+    @ratelimit_wait_and_retry
+    def _get_resource_data(self, guid):
+        return self._note_store.getResourceData(self._client.token, guid)
     
     def _get_notebook(self, notebook_name):
         if not self._notebook_list:
@@ -229,7 +264,7 @@ class EvernoteApiWrapper():
     
     @ratelimit_wait_and_retry
     def _createNote(self, note):
-        self._note_store.createNote(self._client.token, note)
+        return self._note_store.createNote(self._client.token, note)
     
     def saveNoteToNotebook(self, note, in_notebook=None):
         # If no notebook specified - default notebook is used
@@ -237,7 +272,7 @@ class EvernoteApiWrapper():
         if notebook:
             note.notebookGuid = notebook.guid
         logger.info('Saving note "%s" to Evernote' % (note.title))
-        self._createNote(note)
+        return self._createNote(note)
     
     @ratelimit_wait_and_retry
     def updateNote(self, note):
@@ -282,3 +317,13 @@ class EvernoteApiWrapper():
         note.content = note.content.decode('utf-8')
         self._cache[note_guid] = note
         return note
+    
+    def clone_resource(self, resource):
+        """Return a cloned Resource instance from given resource instance."""
+        data = copy.deepcopy(resource.data)
+        if not data.body:
+            logger.info(u'Fetching resource data for cloning')
+            data.body = self._get_resource_data(resource.guid)
+        return Types.Resource(
+            data=data, mime=resource.mime, attributes=
+            Types.ResourceAttributes(fileName=resource.attributes.fileName))

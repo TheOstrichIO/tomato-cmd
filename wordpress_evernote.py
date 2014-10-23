@@ -16,7 +16,7 @@ from __builtin__ import super
 wp_en_parser = argparse.ArgumentParser(
     description='WordPress <--> Evernote utilities')
 wp_en_parser.add_argument('--wordpress',
-                          default='default',
+                          #default='default',
                           help='WordPress account name to use from settings.')
 subparsers = wp_en_parser.add_subparsers()
 
@@ -229,6 +229,10 @@ class EvernoteWordpressAdaptor(object):
     """Evernote-Wordpress Adaptor class."""
     
     @staticmethod
+    def norm_enc(in_str):
+        return in_str.replace(u'\xa0', u' ').encode('utf-8')
+    
+    @staticmethod
     def _parse_xml_from_string(xml_string):
         """Return parsed ElementTree from xml_string."""
         parser = ET.XMLParser()
@@ -242,7 +246,7 @@ class EvernoteWordpressAdaptor(object):
         parser.entity['nbsp'] = ' '
         if isinstance(xml_string, str):
             xml_string = xml_string.decode('utf-8')
-        return ET.fromstring(xml_string.replace(u'\xa0', u' ').encode('utf-8'),
+        return ET.fromstring(EvernoteWordpressAdaptor.norm_enc(xml_string),
                              parser=parser)
     
     @staticmethod
@@ -329,7 +333,10 @@ class EvernoteWordpressAdaptor(object):
                                     'top level span element: %s',
                                     ET.tostring(root))
                     else:
-                        target_node.text += text
+                        if target_node.text:
+                            target_node.text += text
+                        else:
+                            target_node.text = text
                 for e in root:
                     parse_node(e, target_node)
                 if tail:
@@ -348,6 +355,12 @@ class EvernoteWordpressAdaptor(object):
             bad_a.clear()
             bad_a.tag = 'br'
             bad_a.tail = tail
+        # Remove redundant <br/> in <div>s
+        for redundant_div_br in root.findall('.//div/br'):
+            br_tail = fix_text(redundant_div_br.tail)
+            if not br_tail:
+                redundant_div_br.clear()
+                redundant_div_br.tag = 'span'
         # Parse all sub elements of main en-note
         parse_node(root)
         # Clean up redundant empty p tags in normalized tree
@@ -474,7 +487,7 @@ class EvernoteWordpressAdaptor(object):
                 attrs_to_update['link'] = str(wp_item.link)
             self.update_note_metdata(en_note, attrs_to_update)
     
-    def post_to_wordpress_from_note(self, note_link):
+    def post_to_wordpress_from_note(self, note_link, force=False):
         """Create WordPress item from Evernote note,
         and publish it to a WordPress blog.
         
@@ -487,6 +500,8 @@ class EvernoteWordpressAdaptor(object):
         
         :param note_link: Evernote note link string for
                             note with item to publish.
+        :param force: Whether to update based on last modified timestamp,
+                      or always (if set to True).
         """
         # Get note from Evernote
         #: :type en_note: evernote.edam.type.ttypes.Note
@@ -497,7 +512,7 @@ class EvernoteWordpressAdaptor(object):
         # Create a WordPress item from note
         #: :type wp_item: WordPressItem
         wp_item = self.wp_item_from_note(en_note)
-        if (wp_item.last_modified is None or
+        if force or (wp_item.last_modified is None or
             (wp_item.last_modified and note_updated > wp_item.last_modified)):
             # Post the item
             self.create_wordpress_stub_from_note(wp_item, en_note)
@@ -511,15 +526,17 @@ class EvernoteWordpressAdaptor(object):
             logger.info('Skipping posting note %s - not updated recently',
                         en_note.title)
     
-    def sync(self, query):
+    def sync(self, query, force=False):
         """Sync between WordPress site and notes matched by `query`.
         
         :param query: Evernote query used to find notes for sync.
+        :param force: Whether to update based on last modified timestamp,
+                      or always (if set to True).
         """
         for _, note in self.evernote.get_notes_by_query(query):
             logger.info('Posting note "%s" (GUID %s)', note.title, note.guid)
             try:
-                self.post_to_wordpress_from_note(note.guid)
+                self.post_to_wordpress_from_note(note.guid, force)
             except Exception:
                 logger.exception('Failed posting note "%s" (GUID %s)',
                                  note.title, note.guid)
@@ -636,6 +653,82 @@ class EvernoteWordpressAdaptor(object):
         for wp_image in self.wordpress.media_item_generator(parent_id):
             save_wp_image_to_evernote(self.evernote, notebook_name, wp_image,
                                       overrides=overrided_attrs)
+    
+    def preprocess_embedded_images(self, note_link, image_notebook):
+        """Extract embedded images from post note, create image notes for
+        them, and replace reference to image notes in post note.
+        """
+        # Get note from Evernote
+        #: :type en_note: evernote.edam.type.ttypes.Note
+        en_note = self.evernote.get_note(note_link)
+        en_link = self.evernote.note_link(en_note, en_note.title)
+        
+        def bin_to_hex_str(bin_str):
+            return ''.join(['{:02x}'.format(ord(b)) for b in bin_str])
+        def get_resource_by_hex_hash(hex_hash):
+            """Return the resource object with hash matching the given hex_hash
+            string. If no match, nothing is returned.
+            """
+            for res in en_note.resources:
+                if bin_to_hex_str(res.data.bodyHash) == hex_hash:
+                    return res
+        def extract_image(m):
+            """Extracts image resource referenced in media element given by
+            match object m to a new note, and replaces media tag with a-href
+            tag to new note.
+            """
+            d = m.groupdict()
+            media_tag = d.get('mediatag')
+            description = d.get('desc')
+            title = d.get('title')
+            if not all([media_tag, description, title]):
+                logger.warning('Skipping media element with missing '
+                               'attributes (%s)', m.group(0))
+            tag = self._parse_xml_from_string(media_tag)
+            hex_hash = tag.get('hash')  # hex-encoded string
+            if not hex_hash:
+                logger.warning('Skipping media tag with no hash attribute: %s',
+                               media_tag)
+                return
+            resource = get_resource_by_hex_hash(hex_hash)
+            if not resource:
+                logger.warning('Could not find resource matching hex hash %s',
+                               hex_hash)
+                return
+            new_resource = self.evernote.clone_resource(resource)
+            note_title = resource.attributes.fileName
+            note_content = '<div>id=&lt;auto&gt;</div>\r\n'
+            note_content += '<div>title=%s</div>\r\n' % (title)
+            note_content += '<div>link=&lt;auto&gt;</div>\r\n'
+            note_content += '<div>parent=%s</div>\r\n' % (en_link)
+            note_content += '<div>caption=%s</div>\r\n' % (description)
+            note_content += '<div>description=%s</div>\r\n' % (description)
+            note_content += '<br/>\r\n<hr/>\r\n'
+            note_content += '<div>%s</div>' % (media_tag)
+            image_note = self.evernote.makeNote(note_title, note_content,
+                                                resources=[new_resource])
+            image_note = self.evernote.saveNoteToNotebook(image_note,
+                                                          image_notebook)
+            return self.evernote.note_link(image_note, note_title)
+        # Start here
+        media_element_re = re.compile('\!\[(?P<desc>[^\]]*)\]\((?P<mediatag>'
+                                      '\<en-media\W[^\>]*\>)\W\&quot\;'
+                                      '(?P<title>[^\&]*)\&quot\;\)',
+                                      re.IGNORECASE)
+        en_note.content = self.norm_enc(
+            media_element_re.sub(extract_image, en_note.content))
+        self.evernote.updateNote(en_note)
+    
+    def preprocess(self, query, image_notebook):
+        """Perform preprocess pipeline for notes matching query."""
+        for _, note in self.evernote.get_notes_by_query(query):
+            logger.info('Preprocessing note "%s" (GUID %s)',
+                        note.title, note.guid)
+            try:
+                self.preprocess_embedded_images(note.guid, image_notebook)
+            except Exception:
+                logger.exception('Failed preprocessing note "%s" (GUID %s)',
+                                 note.title, note.guid)
 
 def save_wp_image_to_evernote(en_wrapper, notebook_name, wp_image,
                               force=False, overrides={}):
@@ -677,14 +770,19 @@ def save_wp_image_to_evernote(en_wrapper, notebook_name, wp_image,
 ###############################################################################
 
 def _get_adaptor(args):
-    wp_account = settings.WORDPRESS[args.wordpress]
-    # Each entry can be either a WordPressCredentials object,
-    # or a name of another entry.
-    while not isinstance(wp_account, settings.WordPressCredentials):
-        wp_account = settings.WORDPRESS[wp_account]
-    logger.debug('Working with WordPress at URL "%s"', wp_account.xmlrpc_url)
-    wp_wrapper = WordPressApiWrapper(wp_account.xmlrpc_url,
-                                     wp_account.username, wp_account.password)
+    if args.wordpress:
+        wp_account = settings.WORDPRESS[args.wordpress]
+        # Each entry can be either a WordPressCredentials object,
+        # or a name of another entry.
+        while not isinstance(wp_account, settings.WordPressCredentials):
+            wp_account = settings.WORDPRESS[wp_account]
+        logger.debug('Working with WordPress at URL "%s"',
+                     wp_account.xmlrpc_url)
+        wp_wrapper = WordPressApiWrapper(wp_account.xmlrpc_url,
+                                         wp_account.username,
+                                         wp_account.password)
+    else:
+        wp_wrapper = None
     en_wrapper = EvernoteApiWrapper(settings.enDevToken_PRODUCTION)
     return EvernoteWordpressAdaptor(en_wrapper, wp_wrapper)
 
@@ -704,7 +802,10 @@ sync_parser = subparsers.add_parser('sync',
                                     help='Synchronize Evernote-WordPress')
 sync_parser.add_argument('query',
                          help='Evernote query for notes to sync')
-sync_parser.set_defaults(func=lambda adaptor, args: adaptor.sync(args.query))
+sync_parser.add_argument('--force', action='store_true',
+                         help='Post post note regardless of last updated time')
+sync_parser.set_defaults(func=lambda adaptor, args:
+                         adaptor.sync(args.query, args.force))
 
 detach_parser = subparsers.add_parser('detach',
                                       help='Detach Evernote-WordPress '
@@ -729,6 +830,18 @@ import_images_parser.set_defaults(func=lambda adaptor, args:
                                   adaptor.import_images_to_evernote(
                                       args.parent, args.notebook,
                                       args.set_id, args.set_parent))
+
+preprocess_parser = subparsers.add_parser(
+    'preprocess',
+    help='Run preprocessing blocks on notes that match the query')
+preprocess_parser.add_argument('query',
+                               help='Evernote query for notes to proprocess')
+preprocess_parser.add_argument('--image_notebook',
+                               help='Notebook for extracted embedded images')
+preprocess_parser.set_defaults(
+    func=lambda adaptor, args:
+    adaptor.preprocess(args.query,
+                       image_notebook=args.image_notebook))
 
 ###############################################################################
 
