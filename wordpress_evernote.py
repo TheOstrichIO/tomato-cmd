@@ -661,6 +661,10 @@ class EvernoteWordpressAdaptor(object):
         # Get note from Evernote
         #: :type en_note: evernote.edam.type.ttypes.Note
         en_note = self.evernote.get_note(note_link)
+        if 0 == len(en_note.resources):
+            # No embedded images to preprocess
+            logger.info('No embedded images in note "%s"' % (en_note.title))
+            return
         en_link = self.evernote.note_link(en_note, en_note.title)
         
         def bin_to_hex_str(bin_str):
