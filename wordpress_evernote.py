@@ -526,16 +526,20 @@ class EvernoteWordpressAdaptor(object):
             logger.info('Skipping posting note %s - not updated recently',
                         en_note.title)
     
-    def sync(self, query, force=False):
+    def sync(self, query, force=False, preprocess=False, image_notebook=None):
         """Sync between WordPress site and notes matched by `query`.
         
         :param query: Evernote query used to find notes for sync.
         :param force: Whether to update based on last modified timestamp,
                       or always (if set to True).
+        :param preprocess:     Whether to perform note preprocess.
+        :param image_notebook: Notebook for extracted embedded images.
         """
         for _, note in self.evernote.get_notes_by_query(query):
             logger.info('Posting note "%s" (GUID %s)', note.title, note.guid)
             try:
+                if preprocess and note.resources:
+                    self.preprocess_embedded_images(note.guid, image_notebook)
                 self.post_to_wordpress_from_note(note.guid, force)
             except Exception:
                 logger.exception('Failed posting note "%s" (GUID %s)',
@@ -654,7 +658,8 @@ class EvernoteWordpressAdaptor(object):
             save_wp_image_to_evernote(self.evernote, notebook_name, wp_image,
                                       overrides=overrided_attrs)
     
-    def preprocess_embedded_images(self, note_link, image_notebook):
+    def preprocess_embedded_images(self, note_link, image_notebook,
+                                   dryrun=False):
         """Extract embedded images from post note, create image notes for
         them, and replace reference to image notes in post note.
         """
@@ -666,6 +671,7 @@ class EvernoteWordpressAdaptor(object):
             logger.info('No embedded images in note "%s"' % (en_note.title))
             return
         en_link = self.evernote.note_link(en_note, en_note.title)
+        extracted_hashes = set()
         
         def bin_to_hex_str(bin_str):
             return ''.join(['{:02x}'.format(ord(b)) for b in bin_str])
@@ -686,21 +692,30 @@ class EvernoteWordpressAdaptor(object):
             description = d.get('desc')
             title = d.get('title')
             if not all([media_tag, description, title]):
-                logger.warning('Skipping media element with missing '
-                               'attributes (%s)', m.group(0))
+                logger.warn('Skipping media element with missing '
+                            'attributes (%s)', m.group(0))
             tag = self._parse_xml_from_string(media_tag)
             hex_hash = tag.get('hash')  # hex-encoded string
             if not hex_hash:
-                logger.warning('Skipping media tag with no hash attribute: %s',
-                               media_tag)
+                logger.warn('Skipping media tag with no hash attribute: %s',
+                            media_tag)
                 return
             resource = get_resource_by_hex_hash(hex_hash)
             if not resource:
-                logger.warning('Could not find resource matching hex hash %s',
-                               hex_hash)
+                logger.warn('Could not find resource matching hex hash %s',
+                            hex_hash)
                 return
-            new_resource = self.evernote.clone_resource(resource)
-            note_title = resource.attributes.fileName
+            if dryrun:
+                # skip cloning and fetching data in case of dry run
+                new_resource = resource
+            else:
+                new_resource = self.evernote.clone_resource(resource)
+            if resource.attributes.fileName:
+                note_title = resource.attributes.fileName
+            else:
+                logger.warn('Image resource %s missing filename', title)
+                return  # note_title = 'untitled'
+            extracted_hashes.add(hex_hash)
             note_content = '<div>id=&lt;auto&gt;</div>\r\n'
             note_content += '<div>title=%s</div>\r\n' % (title)
             note_content += '<div>link=&lt;auto&gt;</div>\r\n'
@@ -709,27 +724,47 @@ class EvernoteWordpressAdaptor(object):
             note_content += '<div>description=%s</div>\r\n' % (description)
             note_content += '<br/>\r\n<hr/>\r\n'
             note_content += '<div>%s</div>' % (media_tag)
-            image_note = self.evernote.makeNote(note_title, note_content,
-                                                resources=[new_resource])
-            image_note = self.evernote.saveNoteToNotebook(image_note,
-                                                          image_notebook)
-            return self.evernote.note_link(image_note, note_title)
+            if dryrun:
+                logger.info('Got image %s (dryrun)', note_title)
+                return '<ImageLinkStub:%s>' % (note_title)
+            else:
+                image_note = self.evernote.makeNote(note_title, note_content,
+                                                    resources=[new_resource])
+                image_note = self.evernote.saveNoteToNotebook(image_note,
+                                                              image_notebook)
+                return self.evernote.note_link(image_note, note_title)
         # Start here
         media_element_re = re.compile('\!\[(?P<desc>[^\]]*)\]\((?P<mediatag>'
                                       '\<en-media\W[^\>]*\>)\W\&quot\;'
                                       '(?P<title>[^\&]*)\&quot\;\)',
                                       re.IGNORECASE)
+        # Extract images and replace with image note link
         en_note.content = self.norm_enc(
             media_element_re.sub(extract_image, en_note.content))
-        self.evernote.updateNote(en_note)
+        # Check if note contains resources that were not extracted
+        for res in en_note.resources:
+            if not bin_to_hex_str(res.data.bodyHash) in extracted_hashes:
+                res_name = res.attributes.fileName
+                if not res_name:
+                    res_name = bin_to_hex_str(res.data.bodyHash)
+                logger.warn('Resource %s not extracted', res_name)
+        # Update note
+        if not dryrun:
+            self.evernote.updateNote(en_note)
     
-    def preprocess(self, query, image_notebook):
-        """Perform preprocess pipeline for notes matching query."""
+    def preprocess(self, query, image_notebook, dryrun=False):
+        """Perform preprocess pipeline for notes matching query.
+        
+        :param query: Evernote query used to find notes to preprocess.
+        :param image_notebook: Name of Evernote notebook for extracted images.
+        :param dryrun: If `True`, no modifying actions will be performed.
+        """
         for _, note in self.evernote.get_notes_by_query(query):
             logger.info('Preprocessing note "%s" (GUID %s)',
                         note.title, note.guid)
             try:
-                self.preprocess_embedded_images(note.guid, image_notebook)
+                self.preprocess_embedded_images(note.guid, image_notebook,
+                                                dryrun)
             except Exception:
                 logger.exception('Failed preprocessing note "%s" (GUID %s)',
                                  note.title, note.guid)
@@ -808,8 +843,13 @@ sync_parser.add_argument('query',
                          help='Evernote query for notes to sync')
 sync_parser.add_argument('--force', action='store_true',
                          help='Post post note regardless of last updated time')
+sync_parser.add_argument('--preprocess', action='store_true',
+                         help='Perform preprocessing too')
+sync_parser.add_argument('--image_notebook',
+                         help='Notebook for extracted embedded images')
 sync_parser.set_defaults(func=lambda adaptor, args:
-                         adaptor.sync(args.query, args.force))
+                         adaptor.sync(args.query, args.force, args.preprocess,
+                                      args.image_notebook))
 
 detach_parser = subparsers.add_parser('detach',
                                       help='Detach Evernote-WordPress '
@@ -842,10 +882,13 @@ preprocess_parser.add_argument('query',
                                help='Evernote query for notes to proprocess')
 preprocess_parser.add_argument('--image_notebook',
                                help='Notebook for extracted embedded images')
+preprocess_parser.add_argument('--dryrun', action='store_true',
+                               help='Don\'t perform the actions')
 preprocess_parser.set_defaults(
     func=lambda adaptor, args:
     adaptor.preprocess(args.query,
-                       image_notebook=args.image_notebook))
+                       image_notebook=args.image_notebook,
+                       dryrun=args.dryrun))
 
 ###############################################################################
 
