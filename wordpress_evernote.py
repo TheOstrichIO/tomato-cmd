@@ -682,6 +682,14 @@ class EvernoteWordpressAdaptor(object):
             for res in en_note.resources:
                 if bin_to_hex_str(res.data.bodyHash) == hex_hash:
                     return res
+        def cleanup(text):
+            """Return a cleaned up version of the text, or raise an error."""
+            for bad_chr in ('<', '>'):
+                if bad_chr in text:
+                    logger.error('Bad character in text: %s', text)
+                    if not dryrun:
+                        raise ValueError(text)
+            return self.norm_enc(text)
         def extract_image(m):
             """Extracts image resource referenced in media element given by
             match object m to a new note, and replaces media tag with a-href
@@ -689,8 +697,8 @@ class EvernoteWordpressAdaptor(object):
             """
             d = m.groupdict()
             media_tag = d.get('mediatag')
-            description = d.get('desc')
-            title = d.get('title')
+            description = cleanup(d.get('desc'))
+            title = cleanup(d.get('title'))
             if not all([media_tag, description, title]):
                 logger.warn('Skipping media element with missing '
                             'attributes (%s)', m.group(0))
