@@ -9,6 +9,7 @@ import binascii
 import hashlib
 from string import Template
 from collections import namedtuple
+import cgi
 
 #Evernote API:
 from evernote.api.client import EvernoteClient
@@ -176,7 +177,7 @@ class EvernoteApiWrapper():
     def note_link(self, note_or_guid, body):
         """Return a formatted note-link a-tag for note_or_guid."""
         return ('<a href="%s" style="color: rgb(105, 170, 53);">%s</a>' %
-                (self.get_evernote_url(note_or_guid), body))
+                (self.get_evernote_url(note_or_guid), cgi.escape(body)))
     
     @ratelimit_wait_and_retry
     def _listNotebooks(self):

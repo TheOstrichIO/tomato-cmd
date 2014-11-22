@@ -3,6 +3,7 @@
 import re
 import argparse
 from xml.etree import ElementTree as ET
+import cgi
 import csv
 from datetime import datetime
 
@@ -231,7 +232,14 @@ class EvernoteWordpressAdaptor(object):
     @staticmethod
     def norm_enc(in_str):
         return in_str.replace(u'\xa0', u' ').encode('utf-8')
-    
+
+    @staticmethod
+    def evernote_encode(unicode_str):
+        """Return a UTF-8 encoded string for writing to Evernote."""
+        return (unicode_str.replace(u'  ', u'\xa0 ')
+                           .replace(u'  ', u' \xa0')
+                           .encode('utf-8'))
+
     @staticmethod
     def _parse_xml_from_string(xml_string):
         """Return parsed ElementTree from xml_string."""
@@ -609,13 +617,11 @@ class EvernoteWordpressAdaptor(object):
         # TODO: if metadata field doesn't exist - create one?
         if modified_flag:
             logger.info('Writing modified content back to note')
-            note.content = ('\n'.join([
+            note.content = self.evernote_encode('\n'.join([
                 '<?xml version="1.0" encoding="UTF-8" standalone="no"?>',
                 '<!DOCTYPE en-note SYSTEM '
                 '"http://xml.evernote.com/pub/enml2.dtd">',
-                ET.tostring(root)])
-                .replace(u'  ', u'\xa0 ').replace(u'  ', u' \xa0')
-                .encode('utf-8'))
+                ET.tostring(root)]))
             # Replacing pairs of spaces with '\xa0 ' or ' \xa0' in order to
             #  have all whitespace displayed as expected in Evernote editor.
             self.evernote.updateNote(note)
@@ -689,7 +695,7 @@ class EvernoteWordpressAdaptor(object):
                     logger.error('Bad character in text: %s', text)
                     if not dryrun:
                         raise ValueError(text)
-            return self.norm_enc(text)
+            return cgi.escape(self.norm_enc(text))
         def extract_image(m):
             """Extracts image resource referenced in media element given by
             match object m to a new note, and replaces media tag with a-href
@@ -747,7 +753,7 @@ class EvernoteWordpressAdaptor(object):
                                       '(?P<title>[^\&]*)\&quot\;\)',
                                       re.IGNORECASE)
         # Extract images and replace with image note link
-        en_note.content = self.norm_enc(
+        en_note.content = self.evernote_encode(
             media_element_re.sub(extract_image, en_note.content))
         # Check if note contains resources that were not extracted
         for res in en_note.resources:
@@ -758,6 +764,7 @@ class EvernoteWordpressAdaptor(object):
                 logger.warn('Resource %s not extracted', res_name)
         # Update note
         if not dryrun:
+            logger.info('Writing changes back to Evernote')
             self.evernote.updateNote(en_note)
     
     def preprocess(self, query, image_notebook, dryrun=False):
